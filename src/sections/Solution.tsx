@@ -1,9 +1,10 @@
 import {
   BellRing,
-  ClipboardCheck,
+  ChartNoAxesCombined,
   HeartHandshake,
   History,
   Pill,
+  Syringe,
   Stethoscope,
 } from 'lucide-react'
 import { SectionHeading } from '../components/SectionHeading'
@@ -11,8 +12,8 @@ import { SectionHeading } from '../components/SectionHeading'
 const features = [
   {
     icon: Stethoscope,
-    title: 'Cadastro completo dos pets',
-    text: 'Centralize as informações importantes de cada pet em perfis individuais.',
+    title: 'Perfil completo de cada pet',
+    text: 'Centralize dados, raça, idade, observações e informações importantes em um só perfil.',
     color: 'bg-cyan-50 text-cyan-700',
   },
   {
@@ -23,8 +24,8 @@ const features = [
   },
   {
     icon: BellRing,
-    title: 'Lembretes automáticos',
-    text: 'Receba alertas na hora certa e mantenha a rotina sempre em dia.',
+    title: 'Alertas configuráveis',
+    text: 'Escolha quando receber lembretes de medicamentos, tratamentos e próximas vacinas.',
     color: 'bg-amber-50 text-amber-700',
   },
   {
@@ -40,10 +41,16 @@ const features = [
     color: 'bg-rose-50 text-rose-700',
   },
   {
-    icon: ClipboardCheck,
-    title: 'Tratamentos em andamento',
-    text: 'Acompanhe o progresso de forma clara, simples e organizada.',
+    icon: Syringe,
+    title: 'Carteira de vacinas',
+    text: 'Registre vacinas aplicadas, próximas doses e mantenha o histórico sempre acessível.',
     color: 'bg-blue-50 text-blue-700',
+  },
+  {
+    icon: ChartNoAxesCombined,
+    title: 'Peso e evolução',
+    text: 'Acompanhe o histórico de peso e outras informações de saúde ao longo do tempo.',
+    color: 'bg-teal-50 text-teal-700',
   },
 ]
 

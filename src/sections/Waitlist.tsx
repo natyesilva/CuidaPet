@@ -1,5 +1,6 @@
-import { CheckCircle2, Heart, Send, Sparkles } from 'lucide-react'
+import { CheckCircle2, Heart, LoaderCircle, Send, Sparkles } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
+import { supabase } from '../lib/supabase'
 
 type WaitlistData = {
   name: string
@@ -18,14 +19,45 @@ const initialForm: WaitlistData = {
 export function Waitlist() {
   const [formData, setFormData] = useState(initialForm)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    console.info('Novo lead CuidaPet:', formData)
-    setIsSubmitted(true)
+    setErrorMessage('')
+    setIsSubmitting(true)
+
+    try {
+      const { error } = await supabase.from('waitlist').insert({
+        name: formData.name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        pets_count: formData.pets,
+        main_problem: formData.difficulty.trim(),
+      })
+
+      if (error) {
+        if (error.code === '23505') {
+          setErrorMessage('Este e-mail já está na nossa lista de espera.')
+          return
+        }
+
+        throw error
+      }
+
+      setFormData(initialForm)
+      setIsSubmitted(true)
+    } catch (error) {
+      console.error('Não foi possível cadastrar o lead no Supabase:', error)
+      setErrorMessage(
+        'Não foi possível concluir seu cadastro agora. Tente novamente em alguns instantes.',
+      )
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   function updateField(field: keyof WaitlistData, value: string) {
+    if (errorMessage) setErrorMessage('')
     setFormData((current) => ({ ...current, [field]: value }))
   }
 
@@ -82,6 +114,7 @@ export function Waitlist() {
                 onClick={() => {
                   setFormData(initialForm)
                   setIsSubmitted(false)
+                  setErrorMessage('')
                 }}
                 className="focus-ring mt-8 rounded-full border border-slate-300 px-6 py-3 font-bold text-slate-700 transition hover:border-brand-300 hover:text-brand-700"
               >
@@ -157,11 +190,30 @@ export function Waitlist() {
                 </div>
                 <button
                   type="submit"
-                  className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-4 font-bold text-white shadow-lg shadow-brand-600/20 transition hover:-translate-y-0.5 hover:bg-brand-700"
+                  disabled={isSubmitting}
+                  className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-4 font-bold text-white shadow-lg shadow-brand-600/20 transition hover:-translate-y-0.5 hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:translate-y-0"
                 >
-                  Quero testar o CuidaPet
-                  <Send className="size-5" aria-hidden="true" />
+                  {isSubmitting ? (
+                    <>
+                      Enviando...
+                      <LoaderCircle className="size-5 animate-spin" aria-hidden="true" />
+                    </>
+                  ) : (
+                    <>
+                      Quero testar o CuidaPet
+                      <Send className="size-5" aria-hidden="true" />
+                    </>
+                  )}
                 </button>
+                {errorMessage && (
+                  <p
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm font-medium text-rose-700"
+                    role="alert"
+                    aria-live="assertive"
+                  >
+                    {errorMessage}
+                  </p>
+                )}
                 <p className="text-center text-xs leading-5 text-slate-400">
                   Ao enviar, você concorda em receber novidades sobre o CuidaPet.
                 </p>
