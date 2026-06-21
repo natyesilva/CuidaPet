@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cuidapet-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cuidapet_db
+      POSTGRES_USER: cuidapet_user
+      POSTGRES_PASSWORD: cuidapet_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - cuidapet_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cuidapet_user -d cuidapet_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  cuidapet_postgres_data:
