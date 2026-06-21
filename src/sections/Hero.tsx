@@ -149,7 +149,10 @@ export function Hero() {
             </span>
           </h1>
           <p className="mt-7 max-w-2xl text-pretty text-lg leading-8 text-slate-600 sm:text-xl">
-            Organize medicações, doses, horários e tratamentos de todos os seus pets em um só lugar.
+            Organize medicações, vacinas, peso, horários e tratamentos de todos os seus pets em um só lugar.
+          </p>
+          <p className="mt-3 max-w-2xl text-pretty font-semibold leading-7 text-brand-800">
+            Tenha as principais informações sobre a saúde do seu pet sempre na palma da mão.
           </p>
 
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -169,7 +172,7 @@ export function Hero() {
           </div>
 
           <div className="mt-9 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium text-slate-600">
-            {['Fácil de usar', 'Vários pets', 'Família conectada'].map((item) => (
+            {['Carteira de saúde', 'Alertas configuráveis', 'Vários pets'].map((item) => (
               <span key={item} className="inline-flex items-center gap-2">
                 <span className="grid size-5 place-items-center rounded-full bg-brand-100 text-brand-700">
                   <Check className="size-3.5" strokeWidth={3} aria-hidden="true" />

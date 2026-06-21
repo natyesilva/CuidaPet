@@ -25,7 +25,7 @@ export function Footer() {
             <div className="mt-4 flex flex-col gap-3 text-sm">
               <a className="transition hover:text-brand-300" href="#privacidade">Política de Privacidade</a>
               <a className="transition hover:text-brand-300" href="#termos">Termos de Uso</a>
-              <a className="inline-flex items-center gap-2 transition hover:text-brand-300" href="mailto:contato@cuidapet.app">
+              <a className="inline-flex items-center gap-2 transition hover:text-brand-300" href="mailto:natalia.elisa7@gmail.com">
                 <Mail className="size-4" aria-hidden="true" /> Contato
               </a>
             </div>
