@@ -10,7 +10,7 @@ import { ProblemsSolved } from './sections/ProblemsSolved'
 import { Solution } from './sections/Solution'
 import { Waitlist } from './sections/Waitlist'
 
-function App() {
+export function LandingPage() {
   return (
     <div className="min-h-screen overflow-hidden bg-white text-slate-800">
       <Header />
@@ -30,4 +30,4 @@ function App() {
   )
 }
 
-export default App
+export default LandingPage
