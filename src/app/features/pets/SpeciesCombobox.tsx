@@ -1,49 +1,81 @@
 import { Check, ChevronDown, Search } from 'lucide-react'
 import { useId, useState } from 'react'
-import { filterSpeciesGroups } from '../../services/speciesOptions'
+import {
+  filterOptionGroups,
+  getAllSpeciesOptions,
+  optionGroup,
+  type SpeciesGroup,
+} from '../../services/speciesOptions'
 
 type SpeciesComboboxProps = {
   value: string
   onChange: (value: string) => void
+  groups?: SpeciesGroup[]
+  placeholder?: string
+  hint?: string
+  required?: boolean
+  emptyLabel?: string
+  buttonLabel?: string
+  disabled?: boolean
+  allowFreeText?: boolean
 }
 
-export function SpeciesCombobox({ value, onChange }: SpeciesComboboxProps) {
+export function SpeciesCombobox({
+  value,
+  onChange,
+  groups: optionGroups,
+  placeholder = 'Digite ou escolha uma espécie',
+  hint = 'Você pode escolher uma sugestão ou cadastrar livremente outro texto.',
+  required = true,
+  emptyLabel = 'Nenhuma sugestão encontrada.',
+  buttonLabel = 'Mostrar sugestões',
+  disabled = false,
+  allowFreeText = true,
+}: SpeciesComboboxProps) {
   const listboxId = useId()
   const [isOpen, setIsOpen] = useState(false)
-  const groups = filterSpeciesGroups(value)
+  const defaultGroups = optionGroup('Espécies', getAllSpeciesOptions())
+  const sourceGroups = optionGroups ?? defaultGroups
+  const groups = filterOptionGroups(value, sourceGroups)
 
   return (
     <div className="relative">
       <div className="relative">
         <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-400" />
         <input
-          required
+          required={required}
+          disabled={disabled}
           role="combobox"
-          aria-expanded={isOpen}
+          aria-expanded={isOpen && !disabled}
           aria-controls={listboxId}
           aria-autocomplete="list"
           value={value}
-          onFocus={() => setIsOpen(true)}
+          onFocus={() => {
+            if (!disabled) setIsOpen(true)
+          }}
           onBlur={() => window.setTimeout(() => setIsOpen(false), 120)}
           onChange={(event) => {
             onChange(event.target.value)
-            setIsOpen(true)
+            if (!disabled) setIsOpen(true)
           }}
-          className="app-input px-12"
-          placeholder="Digite ou escolha uma espécie"
+          className="app-input px-12 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+          placeholder={placeholder}
         />
         <button
           type="button"
+          disabled={disabled}
           onMouseDown={(event) => event.preventDefault()}
-          onClick={() => setIsOpen((current) => !current)}
-          className="focus-ring absolute right-3 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-xl text-slate-400 hover:bg-slate-50"
-          aria-label="Mostrar sugestões de espécies"
+          onClick={() => {
+            if (!disabled) setIsOpen((current) => !current)
+          }}
+          className="focus-ring absolute right-3 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-xl text-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label={buttonLabel}
         >
           <ChevronDown className={`size-5 transition ${isOpen ? 'rotate-180' : ''}`} />
         </button>
       </div>
 
-      {isOpen && (
+      {isOpen && !disabled && (
         <div
           id={listboxId}
           role="listbox"
@@ -76,13 +108,20 @@ export function SpeciesCombobox({ value, onChange }: SpeciesComboboxProps) {
             ))
           ) : (
             <p className="px-3 py-4 text-sm leading-6 text-slate-500">
-              Nenhuma sugestão encontrada. O texto <strong>{value}</strong> será salvo como espécie.
+              {emptyLabel}{' '}
+              {allowFreeText ? (
+                <>
+                  O texto <strong>{value}</strong> será salvo exatamente assim.
+                </>
+              ) : (
+                'Escolha uma sugestão compatível da lista.'
+              )}
             </p>
           )}
         </div>
       )}
       <p className="mt-2 text-xs leading-5 text-slate-400">
-        Você pode escolher uma sugestão ou cadastrar livremente outra espécie.
+        {hint}
       </p>
     </div>
   )

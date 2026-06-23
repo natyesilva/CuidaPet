@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import type { CreatePetInput } from '../../services/petsService'
 import type { Vaccine } from '../../shared/app-data-context'
 import { useAppData } from '../../shared/app-data-context'
 import { formatDaysAgo, formatShortDate } from '../../shared/date'
@@ -26,7 +27,8 @@ import {
   Field,
   PageIntro,
 } from '../../shared/ui'
-import { formatWeightKg, parseWeightInput } from '../../shared/weight'
+import { formatWeight, parseWeightInput } from '../../shared/weight'
+import { PetForm } from './PetForm'
 
 type DetailTab = 'general' | 'treatments' | 'vaccines' | 'weight'
 
@@ -170,12 +172,14 @@ export function PetDetailPage() {
     feedback,
     clearFeedback,
     refreshData,
+    updatePet,
     addWeight,
     addVaccine,
     updateVaccine,
     deleteVaccine,
   } = useAppData()
   const [activeTab, setActiveTab] = useState<DetailTab>('general')
+  const [isEditingPet, setIsEditingPet] = useState(false)
   const [showWeightForm, setShowWeightForm] = useState(false)
   const [showVaccineForm, setShowVaccineForm] = useState(false)
   const [editingVaccine, setEditingVaccine] = useState<Vaccine | null>(null)
@@ -190,6 +194,26 @@ export function PetDetailPage() {
   const vaccines = getPetVaccines(petId)
   const petTreatments = treatments.filter((treatment) => treatment.petId === petId)
   const today = localDate()
+  const petClassification = pet
+    ? [
+        pet.species,
+        pet.specificSpecies,
+        pet.subspeciesOrMorph,
+      ].filter(Boolean)
+    : []
+
+  async function handlePetSubmit(input: CreatePetInput) {
+    setIsSaving(true)
+    setActionError('')
+    try {
+      await updatePet(petId, input)
+      setIsEditingPet(false)
+    } catch (error) {
+      setActionError(getFriendlyDataError(error))
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   async function handleWeightSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -280,9 +304,13 @@ export function PetDetailPage() {
       </Link>
 
       <PageIntro
-        eyebrow={pet.species}
+        eyebrow={pet.animalGroup || pet.species}
         title={pet.name}
-        description={pet.breed || 'Companheiro cadastrado no CuidaPet'}
+        description={
+          petClassification.length > 0
+            ? petClassification.join(' • ')
+            : pet.breed || 'Companheiro cadastrado no CuidaPet'
+        }
       />
 
       {feedback && <FeedbackBanner {...feedback} onDismiss={clearFeedback} />}
@@ -306,30 +334,65 @@ export function PetDetailPage() {
       </div>
 
       {activeTab === 'general' && (
-        <section className="app-card divide-y divide-slate-100 overflow-hidden">
-          {[
-            ['Espécie', pet.species],
-            ['Raça', pet.breed || 'Não informada'],
-            ['Nascimento', pet.birthDate ? formatShortDate(pet.birthDate) : 'Não informado'],
-            [
-              'Último peso',
-              weights[0] ? `${formatWeightKg(weights[0].weightKg)} kg` : 'Não informado',
-            ],
-          ].map(([label, value]) => (
-            <div key={label} className="flex items-center justify-between gap-4 px-5 py-4">
-              <span className="text-sm font-semibold text-slate-500">{label}</span>
-              <strong className="text-right text-sm text-slate-800">{value}</strong>
-            </div>
-          ))}
-          {pet.notes && (
-            <div className="px-5 py-4">
-              <p className="text-xs font-extrabold uppercase tracking-wide text-slate-400">
-                Observações
-              </p>
-              <p className="mt-2 text-sm leading-6 text-slate-600">{pet.notes}</p>
-            </div>
+        <div className="space-y-4">
+          {isEditingPet ? (
+            <PetForm
+              initialPet={pet}
+              isSaving={isSaving}
+              submitLabel="Salvar alterações"
+              savingLabel="Atualizando..."
+              onSubmit={handlePetSubmit}
+              onCancel={() => setIsEditingPet(false)}
+            />
+          ) : (
+            <>
+              <section className="app-card divide-y divide-slate-100 overflow-hidden">
+                {[
+                  ['Grupo do animal', pet.animalGroup || 'Não informado'],
+                  ['Espécie popular', pet.species],
+                  ['Espécie específica', pet.specificSpecies || 'Não informada'],
+                  ['Subespécie / morfo', pet.subspeciesOrMorph || 'Não informado'],
+                  ['Raça ou tipo', pet.breed || 'Não informada'],
+                  ['Sexo', pet.sex || 'Não informado'],
+                  [
+                    'Nascimento',
+                    pet.birthDate ? formatShortDate(pet.birthDate) : 'Não informado',
+                  ],
+                  [
+                    'Último peso',
+                    weights[0]
+                      ? formatWeight(weights[0].weightKg, pet.weightUnit)
+                      : pet.weightKg
+                        ? formatWeight(pet.weightKg, pet.weightUnit)
+                        : 'Não informado',
+                  ],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex items-center justify-between gap-4 px-5 py-4">
+                    <span className="text-sm font-semibold text-slate-500">{label}</span>
+                    <strong className="text-right text-sm text-slate-800">{value}</strong>
+                  </div>
+                ))}
+                {pet.notes && (
+                  <div className="px-5 py-4">
+                    <p className="text-xs font-extrabold uppercase tracking-wide text-slate-400">
+                      Observações
+                    </p>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{pet.notes}</p>
+                  </div>
+                )}
+              </section>
+
+              <button
+                type="button"
+                onClick={() => setIsEditingPet(true)}
+                className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-brand-200 bg-white px-4 py-3 text-sm font-bold text-brand-700 shadow-sm"
+              >
+                <Edit3 className="size-4" />
+                Editar dados do pet
+              </button>
+            </>
           )}
-        </section>
+        </div>
       )}
 
       {activeTab === 'treatments' && (
@@ -482,8 +545,7 @@ export function PetDetailPage() {
                     Último peso registrado
                   </p>
                   <strong className="mt-3 block text-4xl font-extrabold">
-                    {formatWeightKg(weights[0].weightKg)}
-                    <span className="ml-1 text-lg text-brand-50/80">kg</span>
+                    {formatWeight(weights[0].weightKg, pet.weightUnit)}
                   </strong>
                   <p className="mt-2 text-sm font-semibold text-brand-50/90">
                     {formatDaysAgo(weights[0].recordedAt)}
@@ -584,7 +646,7 @@ export function PetDetailPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                           <strong className="text-lg text-slate-900">
-                            {formatWeightKg(record.weightKg)} kg
+                            {formatWeight(record.weightKg, pet.weightUnit)}
                           </strong>
                           <span className="text-xs font-extrabold text-brand-700">
                             {formatDaysAgo(record.recordedAt)}

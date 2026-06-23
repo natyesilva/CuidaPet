@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react'
-import type { CreatePetInput } from '../services/petsService'
+import type { NotificationScheduleResult } from '../features/notifications/notificationService'
+import type { CreatePetInput, UpdatePetInput } from '../services/petsService'
 import type { CreateWeightInput } from '../services/petWeightService'
 import type { VaccineInput } from '../services/petVaccineService'
 import type { CreateTreatmentInput } from '../services/treatmentsService'
@@ -7,9 +8,14 @@ import type { CreateTreatmentInput } from '../services/treatmentsService'
 export type Pet = {
   id: string
   name: string
+  animalGroup: string | null
   species: string
+  specificSpecies: string | null
+  subspeciesOrMorph: string | null
   breed: string | null
+  sex: string | null
   weightKg: number | null
+  weightUnit: string | null
   birthDate: string | null
   notes: string | null
 }
@@ -78,17 +84,24 @@ export type AppDataContextValue = {
   loadError: string
   feedback: AppFeedback | null
   addPet: (pet: CreatePetInput) => Promise<void>
+  updatePet: (petId: string, pet: UpdatePetInput) => Promise<void>
   deletePet: (petId: string) => Promise<void>
   addWeight: (petId: string, input: CreateWeightInput) => Promise<void>
   addVaccine: (petId: string, input: VaccineInput) => Promise<void>
   updateVaccine: (vaccineId: string, input: VaccineInput) => Promise<void>
   deleteVaccine: (vaccineId: string) => Promise<void>
   addTreatment: (treatment: CreateTreatmentInput) => Promise<void>
+  changeTreatmentStatus: (
+    treatmentId: string,
+    status: 'completed' | 'cancelled',
+  ) => Promise<void>
+  deleteTreatment: (treatmentId: string) => Promise<void>
   updateDoseStatus: (
     doseId: string,
     status: 'applied' | 'skipped',
   ) => Promise<void>
   refreshData: () => Promise<void>
+  syncNotifications: () => Promise<NotificationScheduleResult>
   clearFeedback: () => void
   getPet: (petId: string) => Pet | undefined
   getTreatment: (treatmentId: string) => Treatment | undefined

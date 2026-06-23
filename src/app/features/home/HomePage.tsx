@@ -13,7 +13,7 @@ import { useAppData } from '../../shared/app-data-context'
 import { daysSince, formatRecordedAgo, formatTime } from '../../shared/date'
 import { getPetEmoji } from '../../shared/pet'
 import { DataError, DataLoading, PageIntro } from '../../shared/ui'
-import { formatWeightKg } from '../../shared/weight'
+import { formatWeight } from '../../shared/weight'
 import { useAuth } from '../auth/auth-context'
 
 export function HomePage() {
@@ -147,7 +147,7 @@ export function HomePage() {
                           {pet.name}
                         </strong>
                         <span className="mt-1 block text-sm font-bold text-brand-700">
-                          Último peso: {formatWeightKg(latest.weightKg)} kg
+                          Último peso: {formatWeight(latest.weightKg, pet.weightUnit)}
                         </span>
                         <span
                           className={`mt-1 flex items-center gap-1 text-xs font-semibold ${

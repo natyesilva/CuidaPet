@@ -15,6 +15,7 @@ O projeto reúne duas experiências no mesmo frontend React:
 - Supabase Auth e banco da lista de espera
 - Lucide React
 - Capacitor 7 para Android
+- Capacitor Local Notifications para lembretes de doses
 
 ## Pré-requisitos
 
@@ -107,6 +108,28 @@ Para aplicá-lo:
 O script também cria índices, validações, atualização automática de `updated_at`, ativa Row Level Security e adiciona policies para `select`, `insert`, `update` e `delete` limitadas por `auth.uid() = user_id`.
 
 Depois de aplicar o SQL, entre no app com uma conta real do Supabase. Cadastros e alterações serão persistidos no banco e ficarão isolados por usuário.
+
+### Modelo de cadastro de pets
+
+A tabela `pets` mantém compatibilidade com dados antigos: o campo `species` continua existindo e não foi removido. Para suportar animais exóticos, o app também usa campos opcionais de classificação:
+
+| Campo | Uso |
+| --- | --- |
+| `animal_group` | categoria geral, como `Réptil`, `Ave`, `Roedor/Pequeno mamífero` ou `Cachorro/Gato` |
+| `species` | espécie popular ou tipo principal, como `Cobra`, `Lagarto`, `Calopsita`, `Cachorro` |
+| `specific_species` | espécie específica, como `Corn snake`, `Píton-real`, `Gecko leopardo` |
+| `subspecies_or_morph` | subespécie, morfo, linhagem ou variação, como `Albina`, `Lutino`, `Dumbo` |
+| `breed` | raça ou tipo quando fizer sentido |
+| `sex` | sexo informado livremente |
+| `weight_kg` + `weight_unit` | peso normalizado em kg e unidade preferida para exibição |
+
+Todos os campos de classificação no app funcionam como autocomplete livre: as sugestões ajudam, mas não bloqueiam textos personalizados. Se o schema antigo já foi executado, pode executar novamente o arquivo `supabase/app-schema.sql`; ele usa `add column if not exists` para adicionar os novos campos sem apagar registros existentes.
+
+Se você já tem as tabelas antigas criadas e quer aplicar apenas os novos campos de pets, execute o arquivo menor:
+
+```text
+supabase/pets-exotic-migration.sql
+```
 
 ## Rotas do MVP
 
@@ -233,6 +256,17 @@ O APK será criado em:
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+### Notificações locais
+
+No aplicativo Android, a criação de um tratamento agenda lembretes locais para
+as doses futuras. O app solicita a permissão de notificações no primeiro
+agendamento e permite consultar ou sincronizar os lembretes na tela
+**Perfil**.
+
+No Android 12 ou superior, também é recomendável permitir **alarmes e
+lembretes exatos** nas configurações do CuidaPet. A versão web apresenta um
+fallback informativo e não agenda notificações no navegador.
+
 As variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` são incorporadas ao bundle durante `npm run build`; confirme que o `.env.local` está configurado antes da sincronização.
 
 ### Próximos passos nativos
@@ -240,5 +274,4 @@ As variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` são incorporadas a
 - criar ícone e splash screen próprios;
 - configurar assinatura para APK/AAB de produção;
 - implementar deep links para confirmação de e-mail do Supabase;
-- adicionar notificações locais para doses;
 - remover o acesso local de demonstração antes de uma publicação de produção.

@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { type ReactNode, useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { LandingPage } from '../../App'
 import { HistoryPage } from '../features/doses/HistoryPage'
@@ -11,17 +12,43 @@ import { NewPetPage } from '../features/pets/NewPetPage'
 import { PetDetailPage } from '../features/pets/PetDetailPage'
 import { PetsPage } from '../features/pets/PetsPage'
 import { ProfilePage } from '../features/profile/ProfilePage'
+import { AppSplashScreen } from '../features/splash/AppSplashScreen'
 import { NewTreatmentPage } from '../features/treatments/NewTreatmentPage'
 import { TreatmentsPage } from '../features/treatments/TreatmentsPage'
 import { AppShell } from '../layout/AppShell'
 import { FullScreenLoader } from '../shared/ui'
 
 function RootRoute() {
+  const { isAuthenticated } = useAuth()
+
   return Capacitor.isNativePlatform() ? (
-    <Navigate to="/app" replace />
+    <Navigate to={isAuthenticated ? '/app/home' : '/app/login'} replace />
   ) : (
     <LandingPage />
   )
+}
+
+function NativeStartupGate({ children }: { children: ReactNode }) {
+  const { isLoading } = useAuth()
+  const [minimumSplashElapsed, setMinimumSplashElapsed] = useState(
+    !Capacitor.isNativePlatform(),
+  )
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return
+
+    const timeout = window.setTimeout(() => {
+      setMinimumSplashElapsed(true)
+    }, 1400)
+
+    return () => window.clearTimeout(timeout)
+  }, [])
+
+  if (Capacitor.isNativePlatform() && (isLoading || !minimumSplashElapsed)) {
+    return <AppSplashScreen />
+  }
+
+  return children
 }
 
 function ProtectedRoute() {
@@ -46,31 +73,33 @@ export function AppRouter() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/" element={<RootRoute />} />
+        <NativeStartupGate>
+          <Routes>
+            <Route path="/" element={<RootRoute />} />
 
-          <Route element={<PublicOnlyRoute />}>
-            <Route path="/app/login" element={<LoginPage />} />
-            <Route path="/app/register" element={<RegisterPage />} />
-          </Route>
-
-          <Route path="/app" element={<ProtectedRoute />}>
-            <Route element={<AppShell />}>
-              <Route index element={<Navigate to="home" replace />} />
-              <Route path="home" element={<HomePage />} />
-              <Route path="pets" element={<PetsPage />} />
-              <Route path="pets/new" element={<NewPetPage />} />
-              <Route path="pets/:petId" element={<PetDetailPage />} />
-              <Route path="treatments" element={<TreatmentsPage />} />
-              <Route path="treatments/new" element={<NewTreatmentPage />} />
-              <Route path="today" element={<TodayPage />} />
-              <Route path="history" element={<HistoryPage />} />
-              <Route path="profile" element={<ProfilePage />} />
+            <Route element={<PublicOnlyRoute />}>
+              <Route path="/app/login" element={<LoginPage />} />
+              <Route path="/app/register" element={<RegisterPage />} />
             </Route>
-          </Route>
 
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route path="/app" element={<ProtectedRoute />}>
+              <Route element={<AppShell />}>
+                <Route index element={<Navigate to="home" replace />} />
+                <Route path="home" element={<HomePage />} />
+                <Route path="pets" element={<PetsPage />} />
+                <Route path="pets/new" element={<NewPetPage />} />
+                <Route path="pets/:petId" element={<PetDetailPage />} />
+                <Route path="treatments" element={<TreatmentsPage />} />
+                <Route path="treatments/new" element={<NewTreatmentPage />} />
+                <Route path="today" element={<TodayPage />} />
+                <Route path="history" element={<HistoryPage />} />
+                <Route path="profile" element={<ProfilePage />} />
+              </Route>
+            </Route>
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </NativeStartupGate>
       </AuthProvider>
     </BrowserRouter>
   )

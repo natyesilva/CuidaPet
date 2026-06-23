@@ -6,8 +6,17 @@ import {
   useState,
 } from 'react'
 import { useAuth } from '../features/auth/auth-context'
+import {
+  notificationService,
+  type DoseNotificationInput,
+  type NotificationScheduleResult,
+} from '../features/notifications/notificationService'
 import { dosesService } from '../services/dosesService'
-import { petsService, type CreatePetInput } from '../services/petsService'
+import {
+  petsService,
+  type CreatePetInput,
+  type UpdatePetInput,
+} from '../services/petsService'
 import {
   petVaccineService,
   type VaccineInput,
@@ -20,6 +29,7 @@ import {
   treatmentsService,
   type CreateTreatmentInput,
 } from '../services/treatmentsService'
+import { inferAnimalGroupForSpecies } from '../services/speciesOptions'
 import {
   AppDataContext,
   type AppDataContextValue,
@@ -36,7 +46,9 @@ import { getFriendlyDataError } from './errors'
 type AppData = Pick<
   AppDataContextValue,
   'pets' | 'treatments' | 'doses' | 'history' | 'weightRecords' | 'vaccines'
->
+> & {
+  notificationDoses: Dose[]
+}
 
 const emptyData: AppData = {
   pets: [],
@@ -45,9 +57,132 @@ const emptyData: AppData = {
   history: [],
   weightRecords: [],
   vaccines: [],
+  notificationDoses: [],
 }
 
 const demoStorageKey = 'cuidapet:demo-data'
+
+type FutureDoseInfo = {
+  id: string
+  treatmentId: string
+  petId: string
+  scheduledAt: string
+}
+
+function buildDoseNotifications(
+  futureDoses: FutureDoseInfo[],
+  pets: Pet[],
+  treatments: Treatment[],
+): DoseNotificationInput[] {
+  const petMap = new Map(pets.map((pet) => [pet.id, pet]))
+  const treatmentMap = new Map(
+    treatments.map((treatment) => [treatment.id, treatment]),
+  )
+
+  return futureDoses.flatMap((dose) => {
+    const pet = petMap.get(dose.petId)
+    const treatment = treatmentMap.get(dose.treatmentId)
+
+    if (!pet || !treatment || treatment.status !== 'active') return []
+
+    return [
+      {
+        doseScheduleId: dose.id,
+        treatmentId: dose.treatmentId,
+        petId: dose.petId,
+        petName: pet.name,
+        medicationName: treatment.medicationName,
+        dose: treatment.dose,
+        doseUnit: treatment.doseUnit,
+        scheduledAt: dose.scheduledAt,
+      },
+    ]
+  })
+}
+
+function webNotificationResult(): NotificationScheduleResult {
+  return {
+    supported: false,
+    permission: 'unsupported',
+    scheduled: 0,
+    alreadyScheduled: 0,
+    cancelled: 0,
+    pending: 0,
+  }
+}
+
+function treatmentNotificationFeedback(
+  notificationAttempt: {
+    failed: boolean
+    result: NotificationScheduleResult
+  },
+  doseCount: number,
+) {
+  const doseSummary = `Tratamento criado com ${doseCount} dose(s).`
+  const notificationResult = notificationAttempt.result
+
+  if (notificationAttempt.failed) {
+    return `${doseSummary} Não foi possível agendar os lembretes agora. Use “Sincronizar lembretes” no Perfil.`
+  }
+
+  if (!notificationResult.supported) {
+    return `${doseSummary} Notificações reais funcionam no aplicativo instalado.`
+  }
+
+  if (notificationResult.permission !== 'granted') {
+    return `${doseSummary} Ative as notificações no Perfil para receber os lembretes.`
+  }
+
+  if (notificationResult.scheduled === 0) {
+    return `${doseSummary} Nenhum lembrete futuro novo foi agendado. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.`
+  }
+
+  return `${doseSummary} ${notificationResult.scheduled} lembrete(s) futuro(s) agendado(s) automaticamente. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.`
+}
+
+async function scheduleNotificationsSafely(
+  doses: DoseNotificationInput[],
+  requestPermission = false,
+) {
+  try {
+    return {
+      failed: false,
+      result: await notificationService.scheduleTreatmentNotifications(
+        doses,
+        { requestPermission },
+      ),
+    }
+  } catch {
+    return {
+      failed: true,
+      result: {
+        ...webNotificationResult(),
+        supported: notificationService.isSupported(),
+        permission: notificationService.isSupported()
+          ? 'prompt' as const
+          : 'unsupported' as const,
+      },
+    }
+  }
+}
+
+async function cancelDoseNotificationSafely(doseScheduleId: string) {
+  try {
+    await notificationService.cancelDoseNotification(doseScheduleId)
+  } catch {
+    // A atualização da dose não deve falhar se o sistema operacional
+    // não conseguir remover um lembrete local.
+  }
+}
+
+async function cancelTreatmentNotificationsSafely(treatmentId: string) {
+  try {
+    await notificationService.cancelTreatmentNotifications(treatmentId)
+  } catch {
+    // O tratamento continua salvo mesmo que o Android não permita
+    // alterar os lembretes naquele momento.
+  }
+}
 
 function createDemoData(): AppData {
     const now = new Date()
@@ -67,20 +202,44 @@ function createDemoData(): AppData {
       {
         id: 'demo-pet-luna',
         name: 'Luna',
+        animalGroup: 'Cachorro/Gato',
         species: 'Cachorro',
+        specificSpecies: null,
+        subspeciesOrMorph: null,
         breed: 'Golden Retriever',
+        sex: 'Fêmea',
         weightKg: 24,
+        weightUnit: 'kg',
         birthDate: '2021-03-14',
         notes: 'Dados de demonstração.',
       },
       {
         id: 'demo-pet-mingau',
         name: 'Mingau',
+        animalGroup: 'Cachorro/Gato',
         species: 'Gato',
+        specificSpecies: null,
+        subspeciesOrMorph: null,
         breed: 'SRD',
+        sex: 'Macho',
         weightKg: 5,
+        weightUnit: 'kg',
         birthDate: '2022-09-02',
         notes: null,
+      },
+      {
+        id: 'demo-pet-sol',
+        name: 'Sol',
+        animalGroup: 'Réptil',
+        species: 'Cobra',
+        specificSpecies: 'Corn snake',
+        subspeciesOrMorph: 'Amelanística',
+        breed: null,
+        sex: 'Fêmea',
+        weightKg: 0.42,
+        weightUnit: 'g',
+        birthDate: '2023-11-10',
+        notes: 'Exemplo de animal exótico com espécie específica e morfo.',
       },
     ]
 
@@ -152,6 +311,13 @@ function createDemoData(): AppData {
           recordedAt: thirtyOneDaysAgo.toISOString().slice(0, 10),
           notes: null,
         },
+        {
+          id: 'demo-weight-sol',
+          petId: 'demo-pet-sol',
+          weightKg: 0.42,
+          recordedAt: fiveDaysAgo.toISOString().slice(0, 10),
+          notes: 'Peso em kg equivalente a 420 g.',
+        },
       ],
       vaccines: [
         {
@@ -167,6 +333,7 @@ function createDemoData(): AppData {
           notes: null,
         },
       ],
+      notificationDoses: [],
     }
 }
 
@@ -194,19 +361,45 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     if (isDemoMode) {
       try {
         const stored = localStorage.getItem(demoStorageKey)
+        let nextData: AppData
         if (!stored) {
-          setData(createDemoData())
+          nextData = createDemoData()
         } else {
           const parsed = JSON.parse(stored) as Partial<AppData>
-          setData({
-            pets: parsed.pets ?? [],
+          nextData = {
+            pets: (parsed.pets ?? []).map((pet) => ({
+              ...pet,
+              animalGroup: pet.animalGroup ?? null,
+              specificSpecies: pet.specificSpecies ?? null,
+              subspeciesOrMorph: pet.subspeciesOrMorph ?? null,
+              sex: pet.sex ?? null,
+              weightUnit: pet.weightUnit ?? 'kg',
+            })),
             treatments: parsed.treatments ?? [],
             doses: parsed.doses ?? [],
             history: parsed.history ?? [],
             weightRecords: parsed.weightRecords ?? [],
             vaccines: parsed.vaccines ?? [],
-          })
+            notificationDoses: parsed.notificationDoses ?? [],
+          }
         }
+        setData(nextData)
+        void notificationService
+          .syncPendingNotifications(
+            buildDoseNotifications(
+              nextData.notificationDoses
+                .filter((dose) => dose.status === 'pending')
+                .map((dose) => ({
+                  id: dose.id,
+                  treatmentId: dose.treatmentId,
+                  petId: dose.petId,
+                  scheduledAt: dose.scheduledAt,
+                })),
+              nextData.pets,
+              nextData.treatments,
+            ),
+          )
+          .catch(() => undefined)
       } catch {
         setData(createDemoData())
       } finally {
@@ -223,6 +416,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         historyRows,
         weightRows,
         vaccineRows,
+        futureDoseRows,
       ] = await Promise.all([
         petsService.list(user.id),
         treatmentsService.list(user.id),
@@ -230,14 +424,20 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         dosesService.listHistory(user.id),
         petWeightService.list(user.id),
         petVaccineService.list(user.id),
+        dosesService.listFuturePending(user.id),
       ])
 
       const pets: Pet[] = petRows.map((pet) => ({
         id: pet.id,
         name: pet.name,
+        animalGroup: pet.animal_group ?? inferAnimalGroupForSpecies(pet.species),
         species: pet.species,
+        specificSpecies: pet.specific_species,
+        subspeciesOrMorph: pet.subspecies_or_morph,
         breed: pet.breed,
+        sex: pet.sex,
         weightKg: pet.weight_kg,
+        weightUnit: pet.weight_unit,
         birthDate: pet.birth_date,
         notes: pet.notes,
       }))
@@ -277,7 +477,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         }
       }
 
-      setData({
+      const nextData: AppData = {
         pets,
         treatments,
         doses: doseRows.map(mapDose),
@@ -299,7 +499,23 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           clinicName: vaccine.clinic_name,
           notes: vaccine.notes,
         })),
-      })
+        notificationDoses: [],
+      }
+      setData(nextData)
+      void notificationService
+        .syncPendingNotifications(
+          buildDoseNotifications(
+            futureDoseRows.map((dose) => ({
+              id: dose.id,
+              treatmentId: dose.treatment_id,
+              petId: dose.pet_id,
+              scheduledAt: dose.scheduled_at,
+            })),
+            pets,
+            treatments,
+          ),
+        )
+        .catch(() => undefined)
     } catch (error) {
       setLoadError(getFriendlyDataError(error))
     } finally {
@@ -335,9 +551,14 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             {
               id: petId,
               name: pet.name,
+              animalGroup: pet.animalGroup,
               species: pet.species,
+              specificSpecies: pet.specificSpecies,
+              subspeciesOrMorph: pet.subspeciesOrMorph,
               breed: pet.breed,
+              sex: pet.sex,
               weightKg: pet.weightKg,
+              weightUnit: pet.weightUnit,
               birthDate: pet.birthDate,
               notes: pet.notes,
             },
@@ -365,6 +586,45 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     [data, isDemoMode, refreshData, user],
   )
 
+  const updatePet = useCallback(
+    async (petId: string, pet: UpdatePetInput) => {
+      if (!user) throw new Error('Sessão expirada. Entre novamente.')
+
+      if (isDemoMode) {
+        const nextData: AppData = {
+          ...data,
+          pets: data.pets.map((currentPet) =>
+            currentPet.id === petId
+              ? {
+                  ...currentPet,
+                  name: pet.name,
+                  animalGroup: pet.animalGroup,
+                  species: pet.species,
+                  specificSpecies: pet.specificSpecies,
+                  subspeciesOrMorph: pet.subspeciesOrMorph,
+                  breed: pet.breed,
+                  sex: pet.sex,
+                  weightKg: pet.weightKg,
+                  weightUnit: pet.weightUnit,
+                  birthDate: pet.birthDate,
+                  notes: pet.notes,
+                }
+              : currentPet,
+          ),
+        }
+        setData(nextData)
+        persistDemoData(nextData)
+        setFeedback({ type: 'success', message: 'Dados do pet atualizados.' })
+        return
+      }
+
+      await petsService.update(user.id, petId, pet)
+      await refreshData()
+      setFeedback({ type: 'success', message: 'Dados do pet atualizados.' })
+    },
+    [data, isDemoMode, refreshData, user],
+  )
+
   const deletePet = useCallback(
     async (petId: string) => {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
@@ -388,14 +648,26 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             (record) => record.petId !== petId,
           ),
           vaccines: data.vaccines.filter((vaccine) => vaccine.petId !== petId),
+          notificationDoses: data.notificationDoses.filter(
+            (dose) => dose.petId !== petId,
+          ),
         }
         setData(nextData)
         persistDemoData(nextData)
+        await Promise.all(
+          [...treatmentIds].map(cancelTreatmentNotificationsSafely),
+        )
         setFeedback({ type: 'success', message: 'Pet excluído do modo demo.' })
         return
       }
 
+      const treatmentIds = data.treatments
+        .filter((treatment) => treatment.petId === petId)
+        .map((treatment) => treatment.id)
       await petsService.remove(user.id, petId)
+      await Promise.all(
+        treatmentIds.map(cancelTreatmentNotificationsSafely),
+      )
       await refreshData()
       setFeedback({ type: 'success', message: 'Pet excluído com sucesso.' })
     },
@@ -426,6 +698,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         const todayEnd = new Date(todayStart)
         todayEnd.setDate(todayEnd.getDate() + 1)
         const newDoses: Dose[] = []
+        const allNewDoses: Dose[] = []
         const frequencyMs = treatment.frequencyHours * 60 * 60 * 1000
 
         for (
@@ -433,19 +706,22 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           scheduledAt <= new Date(treatment.endAt).getTime();
           scheduledAt += frequencyMs
         ) {
+          const newDose: Dose = {
+            id: `demo-dose-${crypto.randomUUID()}`,
+            treatmentId,
+            petId: treatment.petId,
+            scheduledAt: new Date(scheduledAt).toISOString(),
+            status: 'pending',
+            appliedAt: null,
+            notes: null,
+            medicationName: treatment.medicationName,
+            dose: treatment.dose,
+            doseUnit: treatment.doseUnit,
+          }
+          allNewDoses.push(newDose)
+
           if (scheduledAt >= todayStart.getTime() && scheduledAt < todayEnd.getTime()) {
-            newDoses.push({
-              id: `demo-dose-${crypto.randomUUID()}`,
-              treatmentId,
-              petId: treatment.petId,
-              scheduledAt: new Date(scheduledAt).toISOString(),
-              status: 'pending',
-              appliedAt: null,
-              notes: null,
-              medicationName: treatment.medicationName,
-              dose: treatment.dose,
-              doseUnit: treatment.doseUnit,
-            })
+            newDoses.push(newDose)
           }
         }
 
@@ -455,21 +731,63 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           doses: [...data.doses, ...newDoses].sort((a, b) =>
             a.scheduledAt.localeCompare(b.scheduledAt),
           ),
+          notificationDoses: [
+            ...data.notificationDoses,
+            ...allNewDoses,
+          ].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)),
         }
         setData(nextData)
         persistDemoData(nextData)
+        const pet = data.pets.find((item) => item.id === treatment.petId)
+        const notificationAttempt = pet
+          ? await scheduleNotificationsSafely(
+              allNewDoses.map((dose) => ({
+                doseScheduleId: dose.id,
+                treatmentId,
+                petId: dose.petId,
+                petName: pet.name,
+                medicationName: dose.medicationName,
+                dose: dose.dose,
+                doseUnit: dose.doseUnit,
+                scheduledAt: dose.scheduledAt,
+              })),
+              true,
+            )
+          : { failed: false, result: webNotificationResult() }
         setFeedback({
           type: 'success',
-          message: 'Tratamento criado no modo demo.',
+          message: treatmentNotificationFeedback(
+            notificationAttempt,
+            allNewDoses.length,
+          ),
         })
         return
       }
 
-      await treatmentsService.create(user.id, treatment)
+      const { schedules } = await treatmentsService.create(user.id, treatment)
+      const pet = data.pets.find((item) => item.id === treatment.petId)
+      const notificationAttempt = pet
+        ? await scheduleNotificationsSafely(
+            schedules.map((dose) => ({
+              doseScheduleId: dose.id,
+              treatmentId: dose.treatment_id,
+              petId: dose.pet_id,
+              petName: pet.name,
+              medicationName: treatment.medicationName,
+              dose: treatment.dose,
+              doseUnit: treatment.doseUnit,
+              scheduledAt: dose.scheduled_at,
+            })),
+            true,
+        )
+      : { failed: false, result: webNotificationResult() }
       await refreshData()
       setFeedback({
         type: 'success',
-        message: 'Tratamento e agenda de doses criados com sucesso.',
+        message: treatmentNotificationFeedback(
+          notificationAttempt,
+          schedules.length,
+        ),
       })
     },
     [data, isDemoMode, refreshData, user],
@@ -579,6 +897,77 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     [data, isDemoMode, refreshData, user],
   )
 
+  const changeTreatmentStatus = useCallback(
+    async (
+      treatmentId: string,
+      status: 'completed' | 'cancelled',
+    ) => {
+      if (!user) throw new Error('Sessão expirada. Entre novamente.')
+
+      if (isDemoMode) {
+        const nextData = {
+          ...data,
+          treatments: data.treatments.map((treatment) =>
+            treatment.id === treatmentId
+              ? { ...treatment, status }
+              : treatment,
+          ),
+        }
+        setData(nextData)
+        persistDemoData(nextData)
+      } else {
+        await treatmentsService.updateStatus(user.id, treatmentId, status)
+        await refreshData()
+      }
+
+      await cancelTreatmentNotificationsSafely(treatmentId)
+      setFeedback({
+        type: 'success',
+        message:
+          status === 'completed'
+            ? 'Tratamento finalizado e lembretes futuros cancelados.'
+            : 'Tratamento cancelado e lembretes futuros removidos.',
+      })
+    },
+    [data, isDemoMode, refreshData, user],
+  )
+
+  const deleteTreatment = useCallback(
+    async (treatmentId: string) => {
+      if (!user) throw new Error('Sessão expirada. Entre novamente.')
+
+      if (isDemoMode) {
+        const nextData: AppData = {
+          ...data,
+          treatments: data.treatments.filter(
+            (treatment) => treatment.id !== treatmentId,
+          ),
+          doses: data.doses.filter(
+            (dose) => dose.treatmentId !== treatmentId,
+          ),
+          history: data.history.filter(
+            (dose) => dose.treatmentId !== treatmentId,
+          ),
+          notificationDoses: data.notificationDoses.filter(
+            (dose) => dose.treatmentId !== treatmentId,
+          ),
+        }
+        setData(nextData)
+        persistDemoData(nextData)
+      } else {
+        await treatmentsService.remove(user.id, treatmentId)
+        await refreshData()
+      }
+
+      await cancelTreatmentNotificationsSafely(treatmentId)
+      setFeedback({
+        type: 'success',
+        message: 'Tratamento e lembretes excluídos.',
+      })
+    },
+    [data, isDemoMode, refreshData, user],
+  )
+
   const updateDoseStatus = useCallback(
     async (doseId: string, status: 'applied' | 'skipped') => {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
@@ -599,6 +988,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             updatedDose,
             ...data.history.filter((dose) => dose.id !== doseId),
           ],
+          notificationDoses: data.notificationDoses.map((dose) =>
+            dose.id === doseId ? updatedDose : dose,
+          ),
         }
         setData(nextData)
         persistDemoData(nextData)
@@ -609,10 +1001,12 @@ export function AppDataProvider({ children }: PropsWithChildren) {
               ? 'Dose marcada como aplicada.'
               : 'Dose marcada como pulada.',
         })
+        await cancelDoseNotificationSafely(doseId)
         return
       }
 
       await dosesService.updateStatus(user.id, doseId, status)
+      await cancelDoseNotificationSafely(doseId)
       await refreshData()
       setFeedback({
         type: 'success',
@@ -625,6 +1019,41 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     [data, isDemoMode, refreshData, user],
   )
 
+  const syncNotifications = useCallback(async () => {
+    if (!user) throw new Error('Sessão expirada. Entre novamente.')
+
+    if (isDemoMode) {
+      return notificationService.syncPendingNotifications(
+        buildDoseNotifications(
+          data.notificationDoses
+            .filter((dose) => dose.status === 'pending')
+            .map((dose) => ({
+              id: dose.id,
+              treatmentId: dose.treatmentId,
+              petId: dose.petId,
+              scheduledAt: dose.scheduledAt,
+            })),
+          data.pets,
+          data.treatments,
+        ),
+      )
+    }
+
+    const futureDoses = await dosesService.listFuturePending(user.id)
+    return notificationService.syncPendingNotifications(
+      buildDoseNotifications(
+        futureDoses.map((dose) => ({
+          id: dose.id,
+          treatmentId: dose.treatment_id,
+          petId: dose.pet_id,
+          scheduledAt: dose.scheduled_at,
+        })),
+        data.pets,
+        data.treatments,
+      ),
+    )
+  }, [data, isDemoMode, user])
+
   const value = useMemo<AppDataContextValue>(
     () => ({
       ...data,
@@ -632,14 +1061,18 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       loadError,
       feedback,
       addPet,
+      updatePet,
       deletePet,
       addWeight,
       addVaccine,
       updateVaccine,
       deleteVaccine,
       addTreatment,
+      changeTreatmentStatus,
+      deleteTreatment,
       updateDoseStatus,
       refreshData,
+      syncNotifications,
       clearFeedback: () => setFeedback(null),
       getPet: (petId) => data.pets.find((pet) => pet.id === petId),
       getTreatment: (treatmentId) =>
@@ -662,13 +1095,17 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       addVaccine,
       addWeight,
       addTreatment,
+      changeTreatmentStatus,
       data,
+      deleteTreatment,
       deleteVaccine,
       deletePet,
       feedback,
       isLoading,
       loadError,
       refreshData,
+      syncNotifications,
+      updatePet,
       updateVaccine,
       updateDoseStatus,
     ],

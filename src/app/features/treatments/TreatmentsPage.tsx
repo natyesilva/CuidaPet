@@ -1,7 +1,19 @@
-import { CalendarDays, Clock3, HeartPulse, Plus, Stethoscope } from 'lucide-react'
+import {
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  HeartPulse,
+  LoaderCircle,
+  Plus,
+  Stethoscope,
+  Trash2,
+  XCircle,
+} from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAppData } from '../../shared/app-data-context'
 import { formatShortDate, formatTime } from '../../shared/date'
+import { getFriendlyDataError } from '../../shared/errors'
 import {
   DataError,
   DataLoading,
@@ -25,7 +37,45 @@ export function TreatmentsPage() {
     feedback,
     clearFeedback,
     refreshData,
+    changeTreatmentStatus,
+    deleteTreatment,
   } = useAppData()
+  const [updatingId, setUpdatingId] = useState('')
+  const [actionError, setActionError] = useState('')
+
+  async function handleStatus(
+    treatmentId: string,
+    status: 'completed' | 'cancelled',
+  ) {
+    const action = status === 'completed' ? 'finalizar' : 'cancelar'
+    if (!window.confirm(`Deseja ${action} este tratamento?`)) return
+
+    setUpdatingId(treatmentId)
+    setActionError('')
+    try {
+      await changeTreatmentStatus(treatmentId, status)
+    } catch (error) {
+      setActionError(getFriendlyDataError(error))
+    } finally {
+      setUpdatingId('')
+    }
+  }
+
+  async function handleDelete(treatmentId: string) {
+    if (!window.confirm('Excluir este tratamento e todas as doses vinculadas?')) {
+      return
+    }
+
+    setUpdatingId(treatmentId)
+    setActionError('')
+    try {
+      await deleteTreatment(treatmentId)
+    } catch (error) {
+      setActionError(getFriendlyDataError(error))
+    } finally {
+      setUpdatingId('')
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -45,6 +95,7 @@ export function TreatmentsPage() {
       />
 
       {feedback && <FeedbackBanner {...feedback} onDismiss={clearFeedback} />}
+      {actionError && <FeedbackBanner type="error" message={actionError} />}
 
       {isLoading ? (
         <DataLoading label="Carregando tratamentos..." />
@@ -120,6 +171,53 @@ export function TreatmentsPage() {
                     {treatment.instructions}
                   </p>
                 )}
+                <div
+                  className={`grid border-t border-slate-100 ${
+                    treatment.status === 'active'
+                      ? 'grid-cols-3'
+                      : 'grid-cols-1'
+                  }`}
+                >
+                  {treatment.status === 'active' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void handleStatus(treatment.id, 'completed')
+                        }
+                        disabled={updatingId === treatment.id}
+                        className="focus-ring inline-flex items-center justify-center gap-1.5 border-r border-slate-100 px-2 py-3 text-[11px] font-bold text-brand-700 disabled:opacity-50"
+                      >
+                        {updatingId === treatment.id ? (
+                          <LoaderCircle className="size-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="size-4" />
+                        )}
+                        Finalizar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void handleStatus(treatment.id, 'cancelled')
+                        }
+                        disabled={updatingId === treatment.id}
+                        className="focus-ring inline-flex items-center justify-center gap-1.5 border-r border-slate-100 px-2 py-3 text-[11px] font-bold text-amber-700 disabled:opacity-50"
+                      >
+                        <XCircle className="size-4" />
+                        Cancelar
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete(treatment.id)}
+                    disabled={updatingId === treatment.id}
+                    className="focus-ring inline-flex items-center justify-center gap-1.5 px-2 py-3 text-[11px] font-bold text-rose-600 disabled:opacity-50"
+                  >
+                    <Trash2 className="size-4" />
+                    Excluir
+                  </button>
+                </div>
               </article>
             )
           })}

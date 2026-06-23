@@ -4,14 +4,34 @@ create table if not exists public.pets (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
+  animal_group text,
   species text not null,
+  specific_species text,
+  subspecies_or_morph text,
   breed text,
+  sex text,
   weight_kg numeric,
+  weight_unit text,
   birth_date date,
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.pets
+  add column if not exists animal_group text;
+
+alter table public.pets
+  add column if not exists specific_species text;
+
+alter table public.pets
+  add column if not exists subspecies_or_morph text;
+
+alter table public.pets
+  add column if not exists sex text;
+
+alter table public.pets
+  add column if not exists weight_unit text;
 
 create table if not exists public.treatments (
   id uuid primary key default gen_random_uuid(),
@@ -246,3 +266,5 @@ create policy "Users can delete own pet vaccines"
 on public.pet_vaccines for delete
 to authenticated
 using (auth.uid() = user_id);
+
+notify pgrst, 'reload schema';

@@ -3,6 +3,7 @@ import type { Database } from '../../lib/database.types'
 
 type TreatmentRow = Database['public']['Tables']['treatments']['Row']
 type TreatmentInsert = Database['public']['Tables']['treatments']['Insert']
+type DoseRow = Database['public']['Tables']['dose_schedules']['Row']
 type DoseInsert = Database['public']['Tables']['dose_schedules']['Insert']
 
 export type CreateTreatmentInput = {
@@ -60,14 +61,19 @@ function generateSchedules(
 
 async function insertSchedules(schedules: DoseInsert[]) {
   const chunkSize = 500
+  const createdSchedules: DoseRow[] = []
 
   for (let index = 0; index < schedules.length; index += chunkSize) {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('dose_schedules')
       .insert(schedules.slice(index, index + chunkSize))
+      .select()
 
     if (error) throw error
+    createdSchedules.push(...data)
   }
+
+  return createdSchedules
 }
 
 export const treatmentsService = {
@@ -82,7 +88,10 @@ export const treatmentsService = {
     return data
   },
 
-  async create(userId: string, input: CreateTreatmentInput): Promise<TreatmentRow> {
+  async create(
+    userId: string,
+    input: CreateTreatmentInput,
+  ): Promise<{ treatment: TreatmentRow; schedules: DoseRow[] }> {
     const record: TreatmentInsert = {
       user_id: userId,
       pet_id: input.petId,
@@ -106,8 +115,10 @@ export const treatmentsService = {
     if (error) throw error
 
     try {
-      await insertSchedules(generateSchedules(userId, treatment.id, input))
-      return treatment
+      const schedules = await insertSchedules(
+        generateSchedules(userId, treatment.id, input),
+      )
+      return { treatment, schedules }
     } catch (scheduleError) {
       await supabase
         .from('treatments')
@@ -117,5 +128,32 @@ export const treatmentsService = {
 
       throw scheduleError
     }
+  },
+
+  async updateStatus(
+    userId: string,
+    treatmentId: string,
+    status: 'completed' | 'cancelled',
+  ): Promise<TreatmentRow> {
+    const { data, error } = await supabase
+      .from('treatments')
+      .update({ status })
+      .eq('id', treatmentId)
+      .eq('user_id', userId)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  async remove(userId: string, treatmentId: string): Promise<void> {
+    const { error } = await supabase
+      .from('treatments')
+      .delete()
+      .eq('id', treatmentId)
+      .eq('user_id', userId)
+
+    if (error) throw error
   },
 }

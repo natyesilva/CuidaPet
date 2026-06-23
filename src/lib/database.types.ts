@@ -62,40 +62,55 @@ export type Database = {
       }
       pets: {
         Row: {
+          animal_group: string | null
           birth_date: string | null
           breed: string | null
           created_at: string
           id: string
           name: string
           notes: string | null
+          sex: string | null
           species: string
+          specific_species: string | null
+          subspecies_or_morph: string | null
           updated_at: string
           user_id: string
           weight_kg: number | null
+          weight_unit: string | null
         }
         Insert: {
+          animal_group?: string | null
           birth_date?: string | null
           breed?: string | null
           created_at?: string
           id?: string
           name: string
           notes?: string | null
+          sex?: string | null
           species: string
+          specific_species?: string | null
+          subspecies_or_morph?: string | null
           updated_at?: string
           user_id: string
           weight_kg?: number | null
+          weight_unit?: string | null
         }
         Update: {
+          animal_group?: string | null
           birth_date?: string | null
           breed?: string | null
           created_at?: string
           id?: string
           name?: string
           notes?: string | null
+          sex?: string | null
           species?: string
+          specific_species?: string | null
+          subspecies_or_morph?: string | null
           updated_at?: string
           user_id?: string
           weight_kg?: number | null
+          weight_unit?: string | null
         }
         Relationships: []
       }

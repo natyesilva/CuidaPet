@@ -12,7 +12,7 @@ import {
   FeedbackBanner,
   PageIntro,
 } from '../../shared/ui'
-import { formatWeightKg } from '../../shared/weight'
+import { formatWeight } from '../../shared/weight'
 
 export function PetsPage() {
   const {
@@ -96,6 +96,11 @@ export function PetsPage() {
             const nextVaccine = getPetVaccines(pet.id).find(
               (vaccine) => vaccine.nextDueAt,
             )
+            const classification = [
+              pet.species,
+              pet.specificSpecies,
+              pet.subspeciesOrMorph,
+            ].filter(Boolean)
 
             return (
               <article key={pet.id} className="app-card overflow-hidden">
@@ -112,12 +117,20 @@ export function PetsPage() {
                         {pet.name}
                       </h2>
                       <p className="mt-0.5 truncate text-sm text-slate-500">
-                        {pet.species}
+                        {classification.join(' • ')}
                       </p>
+                      {pet.animalGroup && (
+                        <p className="mt-1 truncate text-xs font-semibold text-brand-700">
+                          {pet.animalGroup}
+                        </p>
+                      )}
                       <div className="mt-2 flex flex-wrap gap-2">
                         {(lastWeight || pet.weightKg !== null) && (
                           <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
-                            {formatWeightKg(lastWeight?.weightKg ?? pet.weightKg ?? 0)} kg
+                            {formatWeight(
+                              lastWeight?.weightKg ?? pet.weightKg ?? 0,
+                              pet.weightUnit,
+                            )}
                           </span>
                         )}
                         <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-600">

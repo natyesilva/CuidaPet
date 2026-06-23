@@ -73,14 +73,16 @@ function AuthPage({ mode }: AuthPageProps) {
   return (
     <main className="min-h-dvh bg-[radial-gradient(circle_at_top_left,_#d7f7f0_0,_#f7fbff_42%,_#eef6ff_100%)] px-5 py-6 text-slate-800 sm:grid sm:place-items-center">
       <div className="mx-auto w-full max-w-md">
-        <div className="flex items-center justify-between">
-          <Link
-            to="/"
-            className="focus-ring inline-flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white/70 hover:text-brand-700"
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            Voltar
-          </Link>
+        <div className={`flex items-center ${isRegister ? 'justify-between' : 'justify-center'}`}>
+          {isRegister && (
+            <Link
+              to="/app/login"
+              className="focus-ring inline-flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-slate-600 transition hover:bg-white/70 hover:text-brand-700"
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              Voltar para login
+            </Link>
+          )}
           <AppLogo compact />
         </div>
 
@@ -100,15 +102,6 @@ function AuthPage({ mode }: AuthPageProps) {
           </div>
 
           <form className="space-y-5" onSubmit={handleSubmit}>
-            {!isRegister && (
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                <strong className="block font-extrabold">Acesso de demonstração</strong>
-                <span className="mt-1 block">
-                  Usuário: <b>Test</b> · Senha: <b>Admin123</b>
-                </span>
-              </div>
-            )}
-
             {isRegister && (
               <label className="block">
                 <span className="mb-2 block text-sm font-bold text-slate-700">Seu nome</span>
@@ -128,7 +121,7 @@ function AuthPage({ mode }: AuthPageProps) {
 
             <label className="block">
               <span className="mb-2 block text-sm font-bold text-slate-700">
-                {isRegister ? 'E-mail' : 'E-mail ou usuário'}
+                E-mail
               </span>
               <span className="relative block">
                 <Mail className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-slate-400" />
@@ -139,7 +132,7 @@ function AuthPage({ mode }: AuthPageProps) {
                   value={identifier}
                   onChange={(event) => setIdentifier(event.target.value)}
                   className="app-input pl-12"
-                  placeholder={isRegister ? 'voce@email.com' : 'voce@email.com ou Test'}
+                  placeholder="voce@email.com"
                 />
               </span>
             </label>
@@ -201,7 +194,7 @@ function AuthPage({ mode }: AuthPageProps) {
               to={isRegister ? '/app/login' : '/app/register'}
               className="focus-ring rounded-md font-bold text-brand-700 hover:text-brand-800"
             >
-              {isRegister ? 'Entrar' : 'Cadastre-se'}
+              {isRegister ? 'Já tenho conta' : 'Cadastre-se'}
             </Link>
           </p>
         </section>

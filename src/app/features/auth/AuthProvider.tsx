@@ -29,18 +29,46 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     let isMounted = true
 
-    supabase.auth.getSession().then(({ data }) => {
-      if (isMounted) {
+    async function loadPersistedSession() {
+      try {
+        if (localStorage.getItem(demoStorageKey) === 'active') {
+          if (!isMounted) return
+
+          setSession(null)
+          setIsDemoMode(true)
+          return
+        }
+
+        const { data } = await supabase.auth.getSession()
+
+        if (!isMounted) return
+
         setSession(data.session)
-        setIsLoading(false)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
-    })
+    }
+
+    void loadPersistedSession()
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!isMounted) return
+
+      if (localStorage.getItem(demoStorageKey) === 'active') {
+        setSession(null)
+        setIsDemoMode(true)
+        setIsLoading(false)
+        return
+      }
+
       setSession(nextSession)
-      setIsLoading(false)
+      if (event !== 'INITIAL_SESSION') {
+        setIsLoading(false)
+      }
     })
 
     return () => {
@@ -60,17 +88,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (identifier.trim().toLowerCase() === 'test' && password === 'Admin123') {
           localStorage.setItem(demoStorageKey, 'active')
           setIsDemoMode(true)
+          setSession(null)
+          await supabase.auth.signOut().catch(() => undefined)
           return
         }
 
-        const { error } = await supabase.auth.signInWithPassword({
+        localStorage.removeItem(demoStorageKey)
+        setIsDemoMode(false)
+        const { data, error } = await supabase.auth.signInWithPassword({
           email: identifier.trim().toLowerCase(),
           password,
         })
 
         if (error) throw error
+        setSession(data.session)
       },
       async signUp({ name, email, password }) {
+        localStorage.removeItem(demoStorageKey)
+        setIsDemoMode(false)
         const { data, error } = await supabase.auth.signUp({
           email: email.trim().toLowerCase(),
           password,
@@ -80,17 +115,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
         })
 
         if (error) throw error
+        setSession(data.session)
         return { needsEmailConfirmation: !data.session }
       },
       async signOut() {
         if (isDemoMode) {
           localStorage.removeItem(demoStorageKey)
           setIsDemoMode(false)
+          setSession(null)
           return
         }
 
         const { error } = await supabase.auth.signOut()
         if (error) throw error
+        setSession(null)
       },
     }),
     [isDemoMode, isLoading, session],

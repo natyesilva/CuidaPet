@@ -47,6 +47,19 @@ export const dosesService = {
     return data
   },
 
+  async listFuturePending(userId: string): Promise<DoseRow[]> {
+    const { data, error } = await supabase
+      .from('dose_schedules')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'pending')
+      .gt('scheduled_at', new Date().toISOString())
+      .order('scheduled_at', { ascending: true })
+
+    if (error) throw error
+    return data
+  },
+
   async updateStatus(
     userId: string,
     doseId: string,
