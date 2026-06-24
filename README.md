@@ -16,6 +16,7 @@ O projeto reúne duas experiências no mesmo frontend React:
 - Lucide React
 - Capacitor 7 para Android
 - Capacitor Local Notifications para lembretes de doses
+- Vitest, Testing Library e Playwright para testes automatizados
 
 ## Pré-requisitos
 
@@ -183,6 +184,46 @@ npm run preview
 ```
 
 O `vercel.json` contém o rewrite necessário para que URLs como `/app/today` abram diretamente sem retornar 404 na Vercel.
+
+## Pirâmide de testes
+
+O MVP possui uma pirâmide de testes automatizados documentada em:
+
+```text
+docs/testing.md
+```
+
+Resumo das camadas:
+
+```bash
+npm run test:unit
+npm run test:integration
+npm run test:e2e
+```
+
+Também é possível executar a pirâmide completa:
+
+```bash
+npm test
+```
+
+- **Unitários**: validam regras puras como opções dependentes de espécies, peso, datas e IDs numéricos de notificações.
+- **Integração/componentes**: validam interações de tela, como o cadastro de pet com campos dependentes e o login sem exibir o acesso de demonstração.
+- **E2E**: usa Playwright para validar a landing em `/` e o fluxo de login `Test`/`Admin123` até `/app/home`.
+
+Na primeira execução local do Playwright, se o navegador ainda não estiver instalado, rode:
+
+```bash
+npx playwright install chromium
+```
+
+Checklist recomendada antes de abrir PR ou gerar uma nova versão:
+
+```bash
+npm test
+npm run lint
+npm run build
+```
 
 ## Deploy na Vercel
 

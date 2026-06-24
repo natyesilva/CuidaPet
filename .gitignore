@@ -5,6 +5,10 @@ dist
 .env.*.local
 .DS_Store
 *.log
+coverage/
+playwright-report/
+test-results/
+.codex-remote-attachments/
 **/bin/
 **/obj/
 **/.vs/
