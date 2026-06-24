@@ -23,6 +23,7 @@
     min-width: 320px;
     min-height: 100vh;
     background: #ffffff;
+    -webkit-font-smoothing: antialiased;
   }
 
   button,
@@ -53,6 +54,22 @@
 
   .glass-card {
     @apply border border-white/80 bg-white/80 shadow-soft backdrop-blur-xl;
+  }
+
+  .app-card {
+    @apply rounded-[1.5rem] border border-slate-100 bg-white shadow-[0_18px_50px_-32px_rgba(15,118,110,0.45)];
+  }
+
+  .app-input {
+    @apply focus-ring w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-brand-400;
+  }
+
+  .app-safe-top {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+
+  .app-safe-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
   }
 }
 
