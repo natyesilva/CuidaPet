@@ -15,6 +15,7 @@ O projeto reúne duas experiências no mesmo frontend React:
 - Supabase Auth e banco da lista de espera
 - Lucide React
 - Capacitor 7 para Android
+- Capacitor Camera para foto dos pets
 - Capacitor Local Notifications para lembretes de doses
 - Vitest, Testing Library e Playwright para testes automatizados
 
@@ -108,6 +109,12 @@ Para aplicá-lo:
 
 O script também cria índices, validações, atualização automática de `updated_at`, ativa Row Level Security e adiciona policies para `select`, `insert`, `update` e `delete` limitadas por `auth.uid() = user_id`.
 
+Se você já executou uma versão anterior do schema, pode rodar `supabase/app-schema.sql` novamente. O script adiciona os novos campos opcionais de pets sem apagar dados existentes:
+
+- `photo_url`;
+- `approximate_age`;
+- `approximate_age_unit`.
+
 Depois de aplicar o SQL, entre no app com uma conta real do Supabase. Cadastros e alterações serão persistidos no banco e ficarão isolados por usuário.
 
 ### Modelo de cadastro de pets
@@ -122,6 +129,8 @@ A tabela `pets` mantém compatibilidade com dados antigos: o campo `species` con
 | `subspecies_or_morph` | subespécie, morfo, linhagem ou variação, como `Albina`, `Lutino`, `Dumbo` |
 | `breed` | raça ou tipo quando fizer sentido |
 | `sex` | sexo informado livremente |
+| `photo_url` | URL pública da foto do pet no Supabase Storage |
+| `approximate_age` + `approximate_age_unit` | idade aproximada opcional, em meses ou anos |
 | `weight_kg` + `weight_unit` | peso normalizado em kg e unidade preferida para exibição |
 
 Todos os campos de classificação no app funcionam como autocomplete livre: as sugestões ajudam, mas não bloqueiam textos personalizados. Se o schema antigo já foi executado, pode executar novamente o arquivo `supabase/app-schema.sql`; ele usa `add column if not exists` para adicionar os novos campos sem apagar registros existentes.
@@ -131,6 +140,54 @@ Se você já tem as tabelas antigas criadas e quer aplicar apenas os novos campo
 ```text
 supabase/pets-exotic-migration.sql
 ```
+
+### Fotos dos pets
+
+O app salva no banco apenas a URL da imagem, no campo `pets.photo_url`. A imagem deve ficar no Supabase Storage.
+
+Bucket sugerido:
+
+```text
+pet-photos
+```
+
+Configuração recomendada para o MVP:
+
+1. Abra **Supabase → Storage**.
+2. Crie um bucket chamado `pet-photos`.
+3. Para o MVP, deixe o bucket público para que as imagens possam ser exibidas diretamente no app.
+4. Garanta que usuários autenticados possam enviar imagens para o bucket.
+
+Exemplo de policies para o bucket:
+
+```sql
+create policy "Users can upload pet photos"
+on storage.objects
+for insert
+to authenticated
+with check (bucket_id = 'pet-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+
+create policy "Users can update own pet photos"
+on storage.objects
+for update
+to authenticated
+using (bucket_id = 'pet-photos' and auth.uid()::text = (storage.foldername(name))[1])
+with check (bucket_id = 'pet-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+
+create policy "Users can read pet photos"
+on storage.objects
+for select
+to public
+using (bucket_id = 'pet-photos');
+```
+
+As fotos são enviadas para caminhos no formato:
+
+```text
+{user_id}/{pet_id}/{arquivo}
+```
+
+O app não salva base64 no banco.
 
 ## Rotas do MVP
 
@@ -304,6 +361,8 @@ npm run android:sync
 ```
 
 Esse comando gera o build web e copia o conteúdo de `dist` para o projeto Android.
+
+Depois de instalar ou atualizar plugins do Capacitor, como câmera ou notificações, rode também esse comando para atualizar os arquivos nativos.
 
 ### Abrir no Android Studio
 

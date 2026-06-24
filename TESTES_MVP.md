@@ -48,10 +48,15 @@ Use uma das opções abaixo no campo **Status**:
 | Acessar a aba Pets | Lista de pets aparece ou mostra estado vazio claro |  |  |
 | Cadastrar pet comum, exemplo cachorro/gato | Pet é salvo e aparece na lista |  |  |
 | Cadastrar pet exótico, exemplo cobra, lagarto, ave ou roedor | App permite escolher grupo, espécie, espécie específica e morfo/variação quando fizer sentido |  |  |
+| Cadastrar pet com foto | Foto é enviada e aparece no card/lista do pet |  |  |
+| Editar/trocar foto de um pet | Nova foto aparece na lista e no detalhe do pet |  |  |
+| Cadastrar pet com idade aproximada | Idade aparece de forma amigável no card ou detalhe |  |  |
+| Editar idade aproximada | Informação é atualizada corretamente |  |  |
 | Alterar o grupo do animal durante o cadastro | Campos dependentes são limpos para evitar combinações erradas |  |  |
 | Tentar cadastrar pet sem nome | App bloqueia e mostra erro de campo obrigatório |  |  |
 | Tentar cadastrar pet sem espécie/grupo obrigatório | App bloqueia e mostra erro de campo obrigatório |  |  |
 | Abrir detalhe de um pet cadastrado | Tela mostra dados gerais do pet |  |  |
+| Abrir detalhe de pet com foto | Foto aparece no cabeçalho/detalhe do pet |  |  |
 | Editar dados de um pet | Dados são atualizados corretamente |  |  |
 | Excluir um pet de teste | Pet é removido da lista |  |  |
 
@@ -113,6 +118,22 @@ Use uma das opções abaixo no campo **Status**:
 | Pular dose | Status muda para pulada |  |  |
 | Aplicar ou pular dose e atualizar tela | A dose continua com status correto após atualizar/reabrir app |  |  |
 | Ver agenda sem doses no dia | App mostra estado vazio amigável |  |  |
+| Alternar para calendário geral | App mostra cuidados de todos os pets agrupados por data |  |  |
+| Ver evento no calendário geral | Evento mostra pet, tipo, data/horário e status quando existir |  |  |
+| Conferir eventos de vacina no calendário geral | Vacinas futuras e vencidas aparecem com identificação clara |  |  |
+| Conferir pesos no calendário geral | Registros de peso aparecem como eventos históricos |  |  |
+
+---
+
+# 6.1 Agenda individual do pet
+
+| Cenário | Resultado esperado | Status | Observações |
+| --- | --- | --- | --- |
+| Abrir detalhe de um pet e acessar aba Agenda | Mostra a agenda completa daquele animal |  |  |
+| Ver tratamento com múltiplos horários | Doses aparecem nas datas e horários corretos |  |  |
+| Ver vacina do pet na agenda individual | Vacina aparece na data correta |  |  |
+| Ver peso do pet na agenda individual | Pesagens aparecem como histórico do animal |  |  |
+| Abrir agenda de pet sem eventos | App mostra estado vazio amigável |  |  |
 
 ---
 
