@@ -199,6 +199,7 @@ Resumo das camadas:
 npm run test:unit
 npm run test:integration
 npm run test:e2e
+npm run test:coverage
 ```
 
 Também é possível executar a pirâmide completa:
@@ -210,6 +211,44 @@ npm test
 - **Unitários**: validam regras puras como opções dependentes de espécies, peso, datas e IDs numéricos de notificações.
 - **Integração/componentes**: validam interações de tela, como o cadastro de pet com campos dependentes e o login sem exibir o acesso de demonstração.
 - **E2E**: usa Playwright para validar a landing em `/` e o fluxo de login `Test`/`Admin123` até `/app/home`.
+- **Coverage**: usa Vitest com provider `v8` e gera relatórios em texto, HTML e `json-summary`.
+
+Para medir cobertura:
+
+```bash
+npm run test:coverage
+```
+
+O relatório HTML fica em:
+
+```text
+coverage/index.html
+```
+
+O diretório `coverage/` é gerado localmente e não deve ser commitado.
+
+## Checklist manual do MVP
+
+A primeira rodada com uma usuária real deve ser acompanhada pelo checklist:
+
+```text
+TESTES_MVP.md
+```
+
+Esse documento organiza a validação funcional do MVP instalado no Android, cobrindo:
+
+- autenticação;
+- cadastro de pets;
+- registro de peso;
+- vacinas;
+- tratamentos;
+- agenda;
+- histórico;
+- notificações locais;
+- perguntas de feedback da usuária;
+- registro de bugs encontrados.
+
+Use esse checklist antes de liberar o app para mais usuários. A ideia é preencher o status de cada cenário, anotar dúvidas, registrar bugs e decidir se a versão pode avançar para uma nova rodada de testes.
 
 Na primeira execução local do Playwright, se o navegador ainda não estiver instalado, rode:
 
