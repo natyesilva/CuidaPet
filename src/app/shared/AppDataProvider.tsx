@@ -64,6 +64,7 @@ const emptyData: AppData = {
 }
 
 const demoStorageKey = 'cuidapet:demo-data'
+const notificationPermissionPromptKey = 'cuidapet:notification-permission-prompted'
 
 type FutureDoseInfo = {
   id: string
@@ -107,6 +108,7 @@ function webNotificationResult(): NotificationScheduleResult {
   return {
     supported: false,
     permission: 'unsupported',
+    exactAlarm: 'unsupported',
     scheduled: 0,
     alreadyScheduled: 0,
     cancelled: 0,
@@ -137,10 +139,20 @@ function treatmentNotificationFeedback(
   }
 
   if (notificationResult.scheduled === 0) {
-    return `${doseSummary} Nenhum lembrete futuro novo foi agendado. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.`
+    const exactAlarmNotice =
+      notificationResult.exactAlarm === 'denied'
+        ? ' O Android pode atrasar lembretes; permita alarmes exatos no Perfil.'
+        : ''
+
+    return `${doseSummary} Nenhum lembrete futuro novo foi agendado. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.${exactAlarmNotice}`
   }
 
-  return `${doseSummary} ${notificationResult.scheduled} lembrete(s) futuro(s) agendado(s) automaticamente. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.`
+  const exactAlarmNotice =
+    notificationResult.exactAlarm === 'denied'
+      ? ' O Android pode atrasar lembretes; permita alarmes exatos no Perfil para maior precisão.'
+      : ''
+
+  return `${doseSummary} ${notificationResult.scheduled} lembrete(s) futuro(s) agendado(s) automaticamente. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.${exactAlarmNotice}`
 }
 
 async function scheduleNotificationsSafely(
@@ -162,6 +174,9 @@ async function scheduleNotificationsSafely(
         ...webNotificationResult(),
         supported: notificationService.isSupported(),
         permission: notificationService.isSupported()
+          ? 'prompt' as const
+          : 'unsupported' as const,
+        exactAlarm: notificationService.isSupported()
           ? 'prompt' as const
           : 'unsupported' as const,
       },
@@ -559,6 +574,35 @@ export function AppDataProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     void refreshData()
   }, [refreshData])
+
+  useEffect(() => {
+    if (!user || !notificationService.isSupported()) return
+
+    const promptKey = `${notificationPermissionPromptKey}:${user.id}`
+    if (localStorage.getItem(promptKey) === 'done') return
+
+    let cancelled = false
+
+    async function requestNotificationPermissionOnce() {
+      const status = await notificationService.checkPermission()
+      if (cancelled) return
+
+      if (
+        status.permission === 'prompt' ||
+        status.permission === 'prompt-with-rationale'
+      ) {
+        await notificationService.requestPermission()
+      }
+
+      localStorage.setItem(promptKey, 'done')
+    }
+
+    void requestNotificationPermissionOnce().catch(() => undefined)
+
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   const addPet = useCallback(
     async (pet: CreatePetInput) => {

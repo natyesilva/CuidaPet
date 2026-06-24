@@ -398,13 +398,33 @@ android/app/build/outputs/apk/debug/app-debug.apk
 ### Notificações locais
 
 No aplicativo Android, a criação de um tratamento agenda lembretes locais para
-as doses futuras. O app solicita a permissão de notificações no primeiro
-agendamento e permite consultar ou sincronizar os lembretes na tela
-**Perfil**.
+as doses futuras imediatamente, usando o canal Android `treatment-reminders`
+com importância alta. O app solicita a permissão de notificações no primeiro
+acesso após login ou antes do primeiro agendamento e permite consultar ou
+sincronizar os lembretes na tela **Perfil**.
 
 No Android 12 ou superior, também é recomendável permitir **alarmes e
 lembretes exatos** nas configurações do CuidaPet. A versão web apresenta um
 fallback informativo e não agenda notificações no navegador.
+
+Permissões Android usadas:
+
+- `POST_NOTIFICATIONS`: necessária no Android 13+ para exibir notificações.
+- `SCHEDULE_EXACT_ALARM`: usada para melhorar a precisão dos lembretes de remédio quando o usuário permite alarmes exatos.
+
+O app não usa `USE_EXACT_ALARM` nesta versão. Se o Android negar alarmes
+exatos, os lembretes continuam sendo agendados, mas podem sofrer atraso por
+políticas do sistema, economia de bateria ou modo Doze.
+
+Teste manual recomendado no Android real:
+
+1. Instale um APK limpo.
+2. Faça login e permita notificações.
+3. Crie um pet.
+4. Crie um tratamento com dose para daqui 2 minutos.
+5. Feche o app e bloqueie o celular.
+6. Confirme se a notificação aparece no horário.
+7. Reabra o app, sincronize lembretes no Perfil e confira se a contagem não duplicou.
 
 As variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` são incorporadas ao bundle durante `npm run build`; confirme que o `.env.local` está configurado antes da sincronização.
 

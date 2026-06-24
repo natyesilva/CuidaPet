@@ -155,16 +155,28 @@ Use uma das opções abaixo no campo **Status**:
 
 | Cenário | Resultado esperado | Status | Observações |
 | --- | --- | --- | --- |
-| Abrir Perfil e verificar permissões | Tela mostra status atual das notificações |  |  |
+| Fazer login após instalar APK limpo | Android solicita permissão de notificações no primeiro acesso após login, ou o app deixa claro que a permissão já foi definida |  |  |
+| Abrir Perfil e verificar permissões | Tela mostra status atual das notificações, quantidade pendente e orientação sobre alarmes exatos quando necessário |  |  |
 | Tocar em "Ativar notificações" | Android solicita permissão ou app informa que já está permitido |  |  |
-| Enviar notificação de teste pelo Perfil | Notificação aparece cerca de 10 segundos depois |  |  |
-| Criar tratamento com dose para daqui 2 minutos | App agenda notificação futura automaticamente |  |  |
+| Se aparecer aviso de horários exatos | Botão abre as configurações de alarmes/lembretes exatos do CuidaPet |  |  |
+| Criar tratamento com dose para daqui 2 minutos | App agenda notificação futura automaticamente e informa quantos lembretes ficaram pendentes |  |  |
 | Fechar completamente o app após criar dose futura | Notificação aparece no horário previsto mesmo com app fechado |  |  |
 | Bloquear a tela do celular antes do horário da dose | Notificação aparece na tela bloqueada |  |  |
+| Criar tratamento com dois horários futuros | Perfil mostra notificações pendentes para os dois horários após sincronizar |  |  |
+| Editar ou recriar tratamento de teste | Notificações antigas são removidas e novas são agendadas sem duplicar |  |  |
+| Finalizar/cancelar tratamento | Notificações futuras daquele tratamento são canceladas |  |  |
 | Marcar dose como aplicada antes do horário | Notificação daquela dose é cancelada |  |  |
 | Pular dose antes do horário | Notificação daquela dose é cancelada |  |  |
 | Sincronizar lembretes pelo Perfil | App informa quantidade de notificações pendentes/sincronizadas |  |  |
 | Testar com permissão negada | App orienta a ativar notificações nas configurações do celular |  |  |
+| Reabrir app depois de sincronizar | Rotina de reconciliação não duplica notificações pendentes |  |  |
+
+Observações importantes para Android:
+
+- Testar com o celular bloqueado e com o app fechado.
+- Android pode atrasar notificações em modo economia de bateria/Doze, mesmo com `allowWhileIdle`.
+- Para remédios, permitir **Alarmes e lembretes exatos** nas configurações do app aumenta a precisão.
+- O botão de notificação de teste só aparece em ambiente de desenvolvimento; no APK de teste real, validar criando um tratamento para poucos minutos no futuro.
 
 ---
 
