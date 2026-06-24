@@ -50,8 +50,11 @@ Use uma das opções abaixo no campo **Status**:
 | Cadastrar pet exótico, exemplo cobra, lagarto, ave ou roedor | App permite escolher grupo, espécie, espécie específica e morfo/variação quando fizer sentido |  |  |
 | Cadastrar pet com foto | Foto é enviada e aparece no card/lista do pet |  |  |
 | Editar/trocar foto de um pet | Nova foto aparece na lista e no detalhe do pet |  |  |
-| Cadastrar pet com idade aproximada | Idade aparece de forma amigável no card ou detalhe |  |  |
-| Editar idade aproximada | Informação é atualizada corretamente |  |  |
+| Cadastrar pet com peso atual | Peso é obrigatório e aparece de forma amigável no card/detalhe |  |  |
+| Tentar cadastrar pet sem peso | App bloqueia e mostra erro de campo obrigatório |  |  |
+| Cadastrar pet escolhendo idade aproximada | Idade aparece de forma amigável no card ou detalhe |  |  |
+| Cadastrar pet escolhendo data de nascimento | Data é salva e aparece no detalhe do pet |  |  |
+| Alternar entre idade aproximada e data de nascimento | O app mantém apenas o campo escolhido ativo, sem confundir a usuária |  |  |
 | Alterar o grupo do animal durante o cadastro | Campos dependentes são limpos para evitar combinações erradas |  |  |
 | Tentar cadastrar pet sem nome | App bloqueia e mostra erro de campo obrigatório |  |  |
 | Tentar cadastrar pet sem espécie/grupo obrigatório | App bloqueia e mostra erro de campo obrigatório |  |  |

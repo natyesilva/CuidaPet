@@ -130,8 +130,8 @@ A tabela `pets` mantém compatibilidade com dados antigos: o campo `species` con
 | `breed` | raça ou tipo quando fizer sentido |
 | `sex` | sexo informado livremente |
 | `photo_url` | URL pública da foto do pet no Supabase Storage |
-| `approximate_age` + `approximate_age_unit` | idade aproximada opcional, em meses ou anos |
-| `weight_kg` + `weight_unit` | peso normalizado em kg e unidade preferida para exibição |
+| `birth_date` ou `approximate_age` + `approximate_age_unit` | o formulário pede escolher uma das duas formas de informar idade |
+| `weight_kg` + `weight_unit` | peso atual obrigatório no formulário, normalizado em kg e com unidade preferida para exibição |
 
 Todos os campos de classificação no app funcionam como autocomplete livre: as sugestões ajudam, mas não bloqueiam textos personalizados. Se o schema antigo já foi executado, pode executar novamente o arquivo `supabase/app-schema.sql`; ele usa `add column if not exists` para adicionar os novos campos sem apagar registros existentes.
 
