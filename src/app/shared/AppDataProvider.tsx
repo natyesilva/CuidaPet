@@ -202,6 +202,30 @@ async function cancelTreatmentNotificationsSafely(treatmentId: string) {
   }
 }
 
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+      reject(new Error('Não foi possível preparar a foto para o modo demo.'))
+    })
+    reader.addEventListener('error', () => {
+      reject(new Error('Não foi possível preparar a foto para o modo demo.'))
+    })
+    reader.readAsDataURL(file)
+  })
+}
+
+async function resolveDemoPhotoUrl(
+  pet: Pick<CreatePetInput, 'photoFile' | 'photoUrl'>,
+) {
+  if (pet.photoFile) return fileToDataUrl(pet.photoFile)
+  return pet.photoUrl
+}
+
 function createDemoData(): AppData {
     const now = new Date()
     const morning = new Date(now)
@@ -610,6 +634,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
 
       if (isDemoMode) {
         const petId = `demo-pet-${crypto.randomUUID()}`
+        const photoUrl = await resolveDemoPhotoUrl(pet)
         const initialWeight: WeightRecord[] =
           pet.weightKg && pet.weightKg > 0
             ? [
@@ -634,7 +659,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
               subspeciesOrMorph: pet.subspeciesOrMorph,
               breed: pet.breed,
               sex: pet.sex,
-              photoUrl: pet.photoUrl,
+              photoUrl,
               approximateAge: pet.approximateAge,
               approximateAgeUnit: pet.approximateAgeUnit,
               weightKg: pet.weightKg,
@@ -682,6 +707,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
 
       if (isDemoMode) {
+        const photoUrl = await resolveDemoPhotoUrl(pet)
         const nextData: AppData = {
           ...data,
           pets: data.pets.map((currentPet) =>
@@ -695,7 +721,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
                   subspeciesOrMorph: pet.subspeciesOrMorph,
                   breed: pet.breed,
                   sex: pet.sex,
-                  photoUrl: pet.photoUrl,
+                  photoUrl,
                   approximateAge: pet.approximateAge,
                   approximateAgeUnit: pet.approximateAgeUnit,
                   weightKg: pet.weightKg,

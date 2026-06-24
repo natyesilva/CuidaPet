@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Pet } from './app-data-context'
 import { getPetEmoji } from './pet'
 
@@ -18,6 +18,10 @@ const sizeClasses = {
 export function PetAvatar({ pet, size = 'md', className = '' }: PetAvatarProps) {
   const [imageFailed, setImageFailed] = useState(false)
   const showImage = Boolean(pet.photoUrl && !imageFailed)
+
+  useEffect(() => {
+    setImageFailed(false)
+  }, [pet.photoUrl])
 
   return (
     <span
