@@ -1,5 +1,6 @@
-import { Check, LoaderCircle, PawPrint } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
+import { CameraIcon, Check, ImagePlus, LoaderCircle, PawPrint, X } from 'lucide-react'
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react'
 import {
   animalGroupOptions,
   findKnownOption,
@@ -99,6 +100,15 @@ export function PetForm({
   const [breed, setBreed] = useState(initialPet?.breed ?? '')
   const [sex, setSex] = useState(initialPet?.sex ?? '')
   const [birthDate, setBirthDate] = useState(initialPet?.birthDate ?? '')
+  const [photoUrl, setPhotoUrl] = useState(initialPet?.photoUrl ?? '')
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState(initialPet?.photoUrl ?? '')
+  const [approximateAge, setApproximateAge] = useState(
+    initialPet?.approximateAge ? String(initialPet.approximateAge) : '',
+  )
+  const [approximateAgeUnit, setApproximateAgeUnit] = useState<'months' | 'years'>(
+    initialPet?.approximateAgeUnit ?? 'years',
+  )
   const [weightUnit, setWeightUnit] = useState(
     initialPet?.weightUnit === 'g' ? 'g' : 'kg',
   )
@@ -108,6 +118,7 @@ export function PetForm({
   })
   const [notes, setNotes] = useState(initialPet?.notes ?? '')
   const [errorMessage, setErrorMessage] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const animalGroupValues = getAnimalGroupOptions()
   const knownAnimalGroup = findKnownOption(animalGroup, animalGroupValues)
   const speciesGroups = getSpeciesGroupsForAnimalGroup(animalGroup)
@@ -157,6 +168,74 @@ export function PetForm({
     (!canTypeCustomSpecificSpecies && specificSpeciesGroups.length === 0)
   const isMorphDisabled =
     !species.trim() || (!canTypeCustomMorph && morphGroups.length === 0)
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(photoPreviewUrl)
+      }
+    }
+  }, [photoPreviewUrl])
+
+  function setSelectedPhoto(file: File, previewUrl: string) {
+    if (photoPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreviewUrl)
+    }
+    setPhotoFile(file)
+    setPhotoPreviewUrl(previewUrl)
+  }
+
+  async function handlePhotoButtonClick() {
+    setErrorMessage('')
+
+    try {
+      const image = await Camera.getPhoto({
+        quality: 82,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Prompt,
+        promptLabelHeader: 'Foto do pet',
+        promptLabelPhoto: 'Escolher da galeria',
+        promptLabelPicture: 'Tirar foto',
+      })
+
+      if (!image.webPath) return
+
+      const response = await fetch(image.webPath)
+      const blob = await response.blob()
+      const extension = image.format || 'jpg'
+      const file = new File([blob], `foto-pet.${extension}`, {
+        type: blob.type || `image/${extension}`,
+      })
+      setPhotoUrl(initialPet?.photoUrl ?? '')
+      setSelectedPhoto(file, image.webPath)
+    } catch {
+      fileInputRef.current?.click()
+    }
+  }
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage('Escolha um arquivo de imagem para a foto do pet.')
+      return
+    }
+
+    setPhotoUrl(initialPet?.photoUrl ?? '')
+    setSelectedPhoto(file, URL.createObjectURL(file))
+    event.target.value = ''
+  }
+
+  function handleRemovePhoto() {
+    if (photoPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreviewUrl)
+    }
+    setPhotoFile(null)
+    setPhotoPreviewUrl('')
+    setPhotoUrl('')
+  }
 
   function handleAnimalGroupChange(nextValue: string) {
     const knownNextGroup = findKnownOption(nextValue, animalGroupValues)
@@ -259,6 +338,15 @@ export function PetForm({
       return
     }
 
+    const parsedApproximateAge = approximateAge ? Number(approximateAge) : null
+    if (
+      parsedApproximateAge !== null &&
+      (!Number.isInteger(parsedApproximateAge) || parsedApproximateAge <= 0)
+    ) {
+      setErrorMessage('A idade aproximada precisa ser um número inteiro maior que zero.')
+      return
+    }
+
     await onSubmit({
       name: name.trim(),
       animalGroup: animalGroup.trim() || null,
@@ -267,9 +355,10 @@ export function PetForm({
       subspeciesOrMorph: subspeciesOrMorph.trim() || null,
       breed: breed.trim() || null,
       sex: sex.trim() || null,
-      photoUrl: initialPet?.photoUrl ?? null,
-      approximateAge: null,
-      approximateAgeUnit: null,
+      photoUrl: photoUrl || null,
+      photoFile,
+      approximateAge: parsedApproximateAge,
+      approximateAgeUnit: parsedApproximateAge ? approximateAgeUnit : null,
       weightKg,
       weightUnit,
       birthDate: birthDate || null,
@@ -290,6 +379,56 @@ export function PetForm({
       </div>
 
       {errorMessage && <FeedbackBanner type="error" message={errorMessage} />}
+
+      <section className="rounded-[1.5rem] border border-slate-100 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-4">
+          <span className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-[1.65rem] bg-gradient-to-br from-brand-50 to-cyan-100 text-4xl shadow-sm">
+            {photoPreviewUrl ? (
+              <img
+                src={photoPreviewUrl}
+                alt="Prévia da foto do pet"
+                className="size-full object-cover"
+              />
+            ) : (
+              <span>{species ? '🐾' : '📷'}</span>
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-extrabold text-slate-900">Foto do pet</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Use uma foto da galeria ou tire uma nova no Android.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void handlePhotoButtonClick()}
+                className="focus-ring inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-3.5 py-2.5 text-xs font-extrabold text-white"
+              >
+                {photoPreviewUrl ? <CameraIcon className="size-4" /> : <ImagePlus className="size-4" />}
+                {photoPreviewUrl ? 'Trocar foto' : 'Adicionar foto'}
+              </button>
+              {photoPreviewUrl && (
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  className="focus-ring inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-3.5 py-2.5 text-xs font-extrabold text-slate-500"
+                >
+                  <X className="size-4" />
+                  Remover
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </section>
 
       <Field label="Nome do animal">
         <input
@@ -414,6 +553,34 @@ export function PetForm({
             onChange={(event) => setBirthDate(event.target.value)}
             className="app-input"
           />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-[1fr_auto] gap-3">
+        <Field label="Idade aproximada" hint="opcional">
+          <input
+            type="number"
+            min={1}
+            step={1}
+            inputMode="numeric"
+            value={approximateAge}
+            onChange={(event) => setApproximateAge(event.target.value)}
+            className="app-input"
+            placeholder="Ex.: 2"
+          />
+        </Field>
+        <Field label="Unid.">
+          <select
+            value={approximateAgeUnit}
+            onChange={(event) =>
+              setApproximateAgeUnit(event.target.value === 'months' ? 'months' : 'years')
+            }
+            className="app-input w-28 px-3"
+            aria-label="Unidade da idade aproximada"
+          >
+            <option value="months">meses</option>
+            <option value="years">anos</option>
+          </select>
         </Field>
       </div>
 

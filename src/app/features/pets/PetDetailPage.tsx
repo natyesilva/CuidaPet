@@ -19,6 +19,8 @@ import type { Vaccine } from '../../shared/app-data-context'
 import { useAppData } from '../../shared/app-data-context'
 import { formatDaysAgo, formatShortDate } from '../../shared/date'
 import { getFriendlyDataError } from '../../shared/errors'
+import { formatApproximateAge } from '../../shared/pet'
+import { PetAvatar } from '../../shared/PetAvatar'
 import {
   DataError,
   DataLoading,
@@ -201,6 +203,9 @@ export function PetDetailPage() {
         pet.subspeciesOrMorph,
       ].filter(Boolean)
     : []
+  const approximateAge = pet
+    ? formatApproximateAge(pet.approximateAge, pet.approximateAgeUnit)
+    : ''
 
   async function handlePetSubmit(input: CreatePetInput) {
     setIsSaving(true)
@@ -311,6 +316,7 @@ export function PetDetailPage() {
             ? petClassification.join(' • ')
             : pet.breed || 'Companheiro cadastrado no CuidaPet'
         }
+        action={<PetAvatar pet={pet} size="xl" />}
       />
 
       {feedback && <FeedbackBanner {...feedback} onDismiss={clearFeedback} />}
@@ -358,6 +364,7 @@ export function PetDetailPage() {
                     'Nascimento',
                     pet.birthDate ? formatShortDate(pet.birthDate) : 'Não informado',
                   ],
+                  ['Idade aproximada', approximateAge || 'Não informada'],
                   [
                     'Último peso',
                     weights[0]
