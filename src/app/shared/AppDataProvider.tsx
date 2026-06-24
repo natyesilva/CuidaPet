@@ -47,6 +47,7 @@ import { getFriendlyDataError } from './errors'
 type AppData = Pick<
   AppDataContextValue,
   'pets' | 'treatments' | 'doses' | 'history' | 'weightRecords' | 'vaccines'
+  | 'agendaDoses'
 > & {
   notificationDoses: Dose[]
 }
@@ -55,6 +56,7 @@ const emptyData: AppData = {
   pets: [],
   treatments: [],
   doses: [],
+  agendaDoses: [],
   history: [],
   weightRecords: [],
   vaccines: [],
@@ -278,34 +280,39 @@ function createDemoData(): AppData {
       notes: null,
     }
 
+    const doses: Dose[] = [
+      {
+        ...baseDose,
+        id: 'demo-dose-morning',
+        scheduledAt: morning.toISOString(),
+        status: 'pending',
+        appliedAt: null,
+      },
+      {
+        ...baseDose,
+        id: 'demo-dose-evening',
+        scheduledAt: evening.toISOString(),
+        status: 'pending',
+        appliedAt: null,
+      },
+    ]
+
+    const history: Dose[] = [
+      {
+        ...baseDose,
+        id: 'demo-history-yesterday',
+        scheduledAt: yesterday.toISOString(),
+        status: 'applied',
+        appliedAt: new Date(yesterday.getTime() + 5 * 60 * 1000).toISOString(),
+      },
+    ]
+
     return {
       pets,
       treatments,
-      doses: [
-        {
-          ...baseDose,
-          id: 'demo-dose-morning',
-          scheduledAt: morning.toISOString(),
-          status: 'pending',
-          appliedAt: null,
-        },
-        {
-          ...baseDose,
-          id: 'demo-dose-evening',
-          scheduledAt: evening.toISOString(),
-          status: 'pending',
-          appliedAt: null,
-        },
-      ],
-      history: [
-        {
-          ...baseDose,
-          id: 'demo-history-yesterday',
-          scheduledAt: yesterday.toISOString(),
-          status: 'applied',
-          appliedAt: new Date(yesterday.getTime() + 5 * 60 * 1000).toISOString(),
-        },
-      ],
+      doses,
+      agendaDoses: [...doses, ...history],
+      history,
       weightRecords: [
         {
           id: 'demo-weight-luna',
@@ -390,6 +397,10 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             })),
             treatments: parsed.treatments ?? [],
             doses: parsed.doses ?? [],
+            agendaDoses: parsed.agendaDoses ?? [
+              ...(parsed.doses ?? []),
+              ...(parsed.history ?? []),
+            ],
             history: parsed.history ?? [],
             weightRecords: parsed.weightRecords ?? [],
             vaccines: parsed.vaccines ?? [],
@@ -426,6 +437,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         petRows,
         treatmentRows,
         doseRows,
+        agendaDoseRows,
         historyRows,
         weightRows,
         vaccineRows,
@@ -434,6 +446,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         petsService.list(user.id),
         treatmentsService.list(user.id),
         dosesService.listToday(user.id),
+        dosesService.listAgenda(user.id),
         dosesService.listHistory(user.id),
         petWeightService.list(user.id),
         petVaccineService.list(user.id),
@@ -500,6 +513,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         pets,
         treatments,
         doses: doseRows.map(mapDose),
+        agendaDoses: agendaDoseRows.map(mapDose),
         history: historyRows.map(mapDose),
         weightRecords: weightRows.map((record): WeightRecord => ({
           id: record.id,
@@ -684,6 +698,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           doses: data.doses.filter(
             (dose) => dose.petId !== petId && !treatmentIds.has(dose.treatmentId),
           ),
+          agendaDoses: data.agendaDoses.filter(
+            (dose) => dose.petId !== petId && !treatmentIds.has(dose.treatmentId),
+          ),
           history: data.history.filter(
             (dose) => dose.petId !== petId && !treatmentIds.has(dose.treatmentId),
           ),
@@ -772,6 +789,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           ...data,
           treatments: [newTreatment, ...data.treatments],
           doses: [...data.doses, ...newDoses].sort((a, b) =>
+            a.scheduledAt.localeCompare(b.scheduledAt),
+          ),
+          agendaDoses: [...data.agendaDoses, ...allNewDoses].sort((a, b) =>
             a.scheduledAt.localeCompare(b.scheduledAt),
           ),
           notificationDoses: [
@@ -988,6 +1008,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           doses: data.doses.filter(
             (dose) => dose.treatmentId !== treatmentId,
           ),
+          agendaDoses: data.agendaDoses.filter(
+            (dose) => dose.treatmentId !== treatmentId,
+          ),
           history: data.history.filter(
             (dose) => dose.treatmentId !== treatmentId,
           ),
@@ -1027,6 +1050,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         const nextData: AppData = {
           ...data,
           doses: data.doses.map((dose) => (dose.id === doseId ? updatedDose : dose)),
+          agendaDoses: data.agendaDoses.map((dose) =>
+            dose.id === doseId ? updatedDose : dose,
+          ),
           history: [
             updatedDose,
             ...data.history.filter((dose) => dose.id !== doseId),

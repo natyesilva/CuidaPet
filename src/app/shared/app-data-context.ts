@@ -80,6 +80,7 @@ export type AppDataContextValue = {
   pets: Pet[]
   treatments: Treatment[]
   doses: Dose[]
+  agendaDoses: Dose[]
   history: Dose[]
   weightRecords: WeightRecord[]
   vaccines: Vaccine[]
