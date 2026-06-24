@@ -145,22 +145,30 @@ supabase/pets-exotic-migration.sql
 
 O app salva no banco apenas a URL da imagem, no campo `pets.photo_url`. A imagem deve ficar no Supabase Storage.
 
-Bucket sugerido:
+Bucket usado pelo app:
 
 ```text
 pet-photos
 ```
 
-Configuração recomendada para o MVP:
+O arquivo `supabase/app-schema.sql` já cria esse bucket como público para leitura e adiciona policies para usuários autenticados enviarem, atualizarem e removerem arquivos dentro da própria pasta `{user_id}`.
 
-1. Abra **Supabase → Storage**.
-2. Crie um bucket chamado `pet-photos`.
-3. Para o MVP, deixe o bucket público para que as imagens possam ser exibidas diretamente no app.
-4. Garanta que usuários autenticados possam enviar imagens para o bucket.
+Se as tabelas já existem e você precisa corrigir apenas o envio de fotos, execute somente:
 
-Exemplo de policies para o bucket:
+```text
+supabase/pet-photos-storage.sql
+```
+
+Se preferir aplicar apenas a configuração de Storage manualmente, use:
 
 ```sql
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('pet-photos', 'pet-photos', true, 10485760)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit;
+
 create policy "Users can upload pet photos"
 on storage.objects
 for insert

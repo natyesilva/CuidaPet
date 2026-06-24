@@ -6,6 +6,7 @@ dist
 .DS_Store
 *.log
 coverage/
+downloads/
 playwright-report/
 test-results/
 .codex-remote-attachments/
