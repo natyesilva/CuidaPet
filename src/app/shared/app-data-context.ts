@@ -14,6 +14,9 @@ export type Pet = {
   subspeciesOrMorph: string | null
   breed: string | null
   sex: string | null
+  photoUrl: string | null
+  approximateAge: number | null
+  approximateAgeUnit: 'months' | 'years' | null
   weightKg: number | null
   weightUnit: string | null
   birthDate: string | null

@@ -12,6 +12,11 @@ create table if not exists public.pets (
   sex text,
   weight_kg numeric,
   weight_unit text,
+  photo_url text,
+  approximate_age integer check (approximate_age is null or approximate_age > 0),
+  approximate_age_unit text check (
+    approximate_age_unit is null or approximate_age_unit in ('months', 'years')
+  ),
   birth_date date,
   notes text,
   created_at timestamptz not null default now(),
@@ -32,6 +37,29 @@ alter table public.pets
 
 alter table public.pets
   add column if not exists weight_unit text;
+
+alter table public.pets
+  add column if not exists photo_url text;
+
+alter table public.pets
+  add column if not exists approximate_age integer;
+
+alter table public.pets
+  add column if not exists approximate_age_unit text;
+
+alter table public.pets
+  drop constraint if exists pets_approximate_age_check;
+
+alter table public.pets
+  add constraint pets_approximate_age_check
+  check (approximate_age is null or approximate_age > 0);
+
+alter table public.pets
+  drop constraint if exists pets_approximate_age_unit_check;
+
+alter table public.pets
+  add constraint pets_approximate_age_unit_check
+  check (approximate_age_unit is null or approximate_age_unit in ('months', 'years'));
 
 create table if not exists public.treatments (
   id uuid primary key default gen_random_uuid(),

@@ -17,6 +17,7 @@ import {
   type CreatePetInput,
   type UpdatePetInput,
 } from '../services/petsService'
+import { petPhotoService } from '../services/petPhotoService'
 import {
   petVaccineService,
   type VaccineInput,
@@ -208,6 +209,9 @@ function createDemoData(): AppData {
         subspeciesOrMorph: null,
         breed: 'Golden Retriever',
         sex: 'Fêmea',
+        photoUrl: null,
+        approximateAge: null,
+        approximateAgeUnit: null,
         weightKg: 24,
         weightUnit: 'kg',
         birthDate: '2021-03-14',
@@ -222,6 +226,9 @@ function createDemoData(): AppData {
         subspeciesOrMorph: null,
         breed: 'SRD',
         sex: 'Macho',
+        photoUrl: null,
+        approximateAge: null,
+        approximateAgeUnit: null,
         weightKg: 5,
         weightUnit: 'kg',
         birthDate: '2022-09-02',
@@ -236,6 +243,9 @@ function createDemoData(): AppData {
         subspeciesOrMorph: 'Amelanística',
         breed: null,
         sex: 'Fêmea',
+        photoUrl: null,
+        approximateAge: null,
+        approximateAgeUnit: null,
         weightKg: 0.42,
         weightUnit: 'g',
         birthDate: '2023-11-10',
@@ -373,6 +383,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
               specificSpecies: pet.specificSpecies ?? null,
               subspeciesOrMorph: pet.subspeciesOrMorph ?? null,
               sex: pet.sex ?? null,
+              photoUrl: pet.photoUrl ?? null,
+              approximateAge: pet.approximateAge ?? null,
+              approximateAgeUnit: pet.approximateAgeUnit ?? null,
               weightUnit: pet.weightUnit ?? 'kg',
             })),
             treatments: parsed.treatments ?? [],
@@ -436,6 +449,12 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         subspeciesOrMorph: pet.subspecies_or_morph,
         breed: pet.breed,
         sex: pet.sex,
+        photoUrl: pet.photo_url,
+        approximateAge: pet.approximate_age,
+        approximateAgeUnit:
+          pet.approximate_age_unit === 'months' || pet.approximate_age_unit === 'years'
+            ? pet.approximate_age_unit
+            : null,
         weightKg: pet.weight_kg,
         weightUnit: pet.weight_unit,
         birthDate: pet.birth_date,
@@ -557,6 +576,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
               subspeciesOrMorph: pet.subspeciesOrMorph,
               breed: pet.breed,
               sex: pet.sex,
+              photoUrl: pet.photoUrl,
+              approximateAge: pet.approximateAge,
+              approximateAgeUnit: pet.approximateAgeUnit,
               weightKg: pet.weightKg,
               weightUnit: pet.weightUnit,
               birthDate: pet.birthDate,
@@ -572,7 +594,18 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         return
       }
 
-      const createdPet = await petsService.create(user.id, pet)
+      const createdPet = await petsService.create(user.id, {
+        ...pet,
+        photoUrl: pet.photoFile ? null : pet.photoUrl,
+      })
+      if (pet.photoFile) {
+        const photoUrl = await petPhotoService.upload(user.id, createdPet.id, pet.photoFile)
+        await petsService.update(user.id, createdPet.id, {
+          ...pet,
+          photoUrl,
+          photoFile: null,
+        })
+      }
       if (pet.weightKg && pet.weightKg > 0) {
         await petWeightService.create(user.id, createdPet.id, {
           weightKg: pet.weightKg,
@@ -604,6 +637,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
                   subspeciesOrMorph: pet.subspeciesOrMorph,
                   breed: pet.breed,
                   sex: pet.sex,
+                  photoUrl: pet.photoUrl,
+                  approximateAge: pet.approximateAge,
+                  approximateAgeUnit: pet.approximateAgeUnit,
                   weightKg: pet.weightKg,
                   weightUnit: pet.weightUnit,
                   birthDate: pet.birthDate,
@@ -618,7 +654,14 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         return
       }
 
-      await petsService.update(user.id, petId, pet)
+      const photoUrl = pet.photoFile
+        ? await petPhotoService.upload(user.id, petId, pet.photoFile)
+        : pet.photoUrl
+      await petsService.update(user.id, petId, {
+        ...pet,
+        photoUrl,
+        photoFile: null,
+      })
       await refreshData()
       setFeedback({ type: 'success', message: 'Dados do pet atualizados.' })
     },
