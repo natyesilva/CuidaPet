@@ -36,6 +36,7 @@ function permissionLabel(status: NotificationStatus) {
 export function ProfilePage() {
   const { user, signOut } = useAuth()
   const { syncNotifications } = useAppData()
+  const showNotificationDiagnostics = import.meta.env.DEV
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [isUpdatingNotifications, setIsUpdatingNotifications] =
     useState(false)
@@ -107,7 +108,10 @@ export function ProfilePage() {
       setPendingCount(result.pending)
       setNotificationFeedback({
         type: 'success',
-        message: `Notificações ativadas. ${result.pending} lembrete(s) agendado(s).`,
+        message:
+          result.exactAlarm === 'denied'
+            ? `Notificações ativadas. ${result.pending} lembrete(s) agendado(s). O Android pode atrasar horários; permita alarmes exatos para maior precisão.`
+            : `Notificações ativadas. ${result.pending} lembrete(s) agendado(s).`,
       })
     } catch {
       setNotificationFeedback({
@@ -145,7 +149,10 @@ export function ProfilePage() {
       setPendingCount(result.pending)
       setNotificationFeedback({
         type: 'success',
-        message: `Lembretes sincronizados: ${result.scheduled} criado(s), ${result.cancelled} removido(s) e ${result.pending} pendente(s).`,
+        message:
+          result.exactAlarm === 'denied'
+            ? `Lembretes sincronizados: ${result.scheduled} criado(s), ${result.cancelled} removido(s) e ${result.pending} pendente(s). Permita alarmes exatos para reduzir atrasos no Android.`
+            : `Lembretes sincronizados: ${result.scheduled} criado(s), ${result.cancelled} removido(s) e ${result.pending} pendente(s).`,
       })
     } catch {
       setNotificationFeedback({
@@ -188,7 +195,7 @@ export function ProfilePage() {
 
       setNotificationFeedback({
         type: 'success',
-        message: 'Notificação de teste agendada para daqui 10 segundos.',
+        message: 'Notificação de teste agendada para daqui 1 minuto.',
       })
     } catch {
       setNotificationFeedback({
@@ -352,19 +359,21 @@ export function ProfilePage() {
               Sincronizar lembretes
             </button>
 
-            <button
-              type="button"
-              onClick={() => void handleTestNotification()}
-              disabled={isUpdatingNotifications}
-              className="focus-ring inline-flex items-center justify-center gap-2 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-800 disabled:opacity-60"
-            >
-              {isUpdatingNotifications ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <Bell className="size-4" />
-              )}
-              Enviar notificação de teste
-            </button>
+            {showNotificationDiagnostics && (
+              <button
+                type="button"
+                onClick={() => void handleTestNotification()}
+                disabled={isUpdatingNotifications}
+                className="focus-ring inline-flex items-center justify-center gap-2 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-800 disabled:opacity-60"
+              >
+                {isUpdatingNotifications ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <Bell className="size-4" />
+                )}
+                Enviar notificação de teste
+              </button>
+            )}
           </div>
         </div>
       </section>

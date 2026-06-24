@@ -48,10 +48,18 @@ Use uma das opções abaixo no campo **Status**:
 | Acessar a aba Pets | Lista de pets aparece ou mostra estado vazio claro |  |  |
 | Cadastrar pet comum, exemplo cachorro/gato | Pet é salvo e aparece na lista |  |  |
 | Cadastrar pet exótico, exemplo cobra, lagarto, ave ou roedor | App permite escolher grupo, espécie, espécie específica e morfo/variação quando fizer sentido |  |  |
+| Cadastrar pet com foto | Foto é enviada e aparece no card/lista do pet |  |  |
+| Editar/trocar foto de um pet | Nova foto aparece na lista e no detalhe do pet |  |  |
+| Cadastrar pet com peso atual | Peso é obrigatório e aparece de forma amigável no card/detalhe |  |  |
+| Tentar cadastrar pet sem peso | App bloqueia e mostra erro de campo obrigatório |  |  |
+| Cadastrar pet escolhendo idade aproximada | Idade aparece de forma amigável no card ou detalhe |  |  |
+| Cadastrar pet escolhendo data de nascimento | Data é salva e aparece no detalhe do pet |  |  |
+| Alternar entre idade aproximada e data de nascimento | O app mantém apenas o campo escolhido ativo, sem confundir a usuária |  |  |
 | Alterar o grupo do animal durante o cadastro | Campos dependentes são limpos para evitar combinações erradas |  |  |
 | Tentar cadastrar pet sem nome | App bloqueia e mostra erro de campo obrigatório |  |  |
 | Tentar cadastrar pet sem espécie/grupo obrigatório | App bloqueia e mostra erro de campo obrigatório |  |  |
 | Abrir detalhe de um pet cadastrado | Tela mostra dados gerais do pet |  |  |
+| Abrir detalhe de pet com foto | Foto aparece no cabeçalho/detalhe do pet |  |  |
 | Editar dados de um pet | Dados são atualizados corretamente |  |  |
 | Excluir um pet de teste | Pet é removido da lista |  |  |
 
@@ -113,6 +121,22 @@ Use uma das opções abaixo no campo **Status**:
 | Pular dose | Status muda para pulada |  |  |
 | Aplicar ou pular dose e atualizar tela | A dose continua com status correto após atualizar/reabrir app |  |  |
 | Ver agenda sem doses no dia | App mostra estado vazio amigável |  |  |
+| Alternar para calendário geral | App mostra cuidados de todos os pets agrupados por data |  |  |
+| Ver evento no calendário geral | Evento mostra pet, tipo, data/horário e status quando existir |  |  |
+| Conferir eventos de vacina no calendário geral | Vacinas futuras e vencidas aparecem com identificação clara |  |  |
+| Conferir pesos no calendário geral | Registros de peso aparecem como eventos históricos |  |  |
+
+---
+
+# 6.1 Agenda individual do pet
+
+| Cenário | Resultado esperado | Status | Observações |
+| --- | --- | --- | --- |
+| Abrir detalhe de um pet e acessar aba Agenda | Mostra a agenda completa daquele animal |  |  |
+| Ver tratamento com múltiplos horários | Doses aparecem nas datas e horários corretos |  |  |
+| Ver vacina do pet na agenda individual | Vacina aparece na data correta |  |  |
+| Ver peso do pet na agenda individual | Pesagens aparecem como histórico do animal |  |  |
+| Abrir agenda de pet sem eventos | App mostra estado vazio amigável |  |  |
 
 ---
 
@@ -134,16 +158,28 @@ Use uma das opções abaixo no campo **Status**:
 
 | Cenário | Resultado esperado | Status | Observações |
 | --- | --- | --- | --- |
-| Abrir Perfil e verificar permissões | Tela mostra status atual das notificações |  |  |
+| Fazer login após instalar APK limpo | Android solicita permissão de notificações no primeiro acesso após login, ou o app deixa claro que a permissão já foi definida |  |  |
+| Abrir Perfil e verificar permissões | Tela mostra status atual das notificações, quantidade pendente e orientação sobre alarmes exatos quando necessário |  |  |
 | Tocar em "Ativar notificações" | Android solicita permissão ou app informa que já está permitido |  |  |
-| Enviar notificação de teste pelo Perfil | Notificação aparece cerca de 10 segundos depois |  |  |
-| Criar tratamento com dose para daqui 2 minutos | App agenda notificação futura automaticamente |  |  |
+| Se aparecer aviso de horários exatos | Botão abre as configurações de alarmes/lembretes exatos do CuidaPet |  |  |
+| Criar tratamento com dose para daqui 2 minutos | App agenda notificação futura automaticamente e informa quantos lembretes ficaram pendentes |  |  |
 | Fechar completamente o app após criar dose futura | Notificação aparece no horário previsto mesmo com app fechado |  |  |
 | Bloquear a tela do celular antes do horário da dose | Notificação aparece na tela bloqueada |  |  |
+| Criar tratamento com dois horários futuros | Perfil mostra notificações pendentes para os dois horários após sincronizar |  |  |
+| Editar ou recriar tratamento de teste | Notificações antigas são removidas e novas são agendadas sem duplicar |  |  |
+| Finalizar/cancelar tratamento | Notificações futuras daquele tratamento são canceladas |  |  |
 | Marcar dose como aplicada antes do horário | Notificação daquela dose é cancelada |  |  |
 | Pular dose antes do horário | Notificação daquela dose é cancelada |  |  |
 | Sincronizar lembretes pelo Perfil | App informa quantidade de notificações pendentes/sincronizadas |  |  |
 | Testar com permissão negada | App orienta a ativar notificações nas configurações do celular |  |  |
+| Reabrir app depois de sincronizar | Rotina de reconciliação não duplica notificações pendentes |  |  |
+
+Observações importantes para Android:
+
+- Testar com o celular bloqueado e com o app fechado.
+- Android pode atrasar notificações em modo economia de bateria/Doze, mesmo com `allowWhileIdle`.
+- Para remédios, permitir **Alarmes e lembretes exatos** nas configurações do app aumenta a precisão.
+- O botão de notificação de teste só aparece em ambiente de desenvolvimento; no APK de teste real, validar criando um tratamento para poucos minutos no futuro.
 
 ---
 

@@ -12,6 +12,11 @@ create table if not exists public.pets (
   sex text,
   weight_kg numeric,
   weight_unit text,
+  photo_url text,
+  approximate_age integer check (approximate_age is null or approximate_age > 0),
+  approximate_age_unit text check (
+    approximate_age_unit is null or approximate_age_unit in ('months', 'years')
+  ),
   birth_date date,
   notes text,
   created_at timestamptz not null default now(),
@@ -32,6 +37,29 @@ alter table public.pets
 
 alter table public.pets
   add column if not exists weight_unit text;
+
+alter table public.pets
+  add column if not exists photo_url text;
+
+alter table public.pets
+  add column if not exists approximate_age integer;
+
+alter table public.pets
+  add column if not exists approximate_age_unit text;
+
+alter table public.pets
+  drop constraint if exists pets_approximate_age_check;
+
+alter table public.pets
+  add constraint pets_approximate_age_check
+  check (approximate_age is null or approximate_age > 0);
+
+alter table public.pets
+  drop constraint if exists pets_approximate_age_unit_check;
+
+alter table public.pets
+  add constraint pets_approximate_age_unit_check
+  check (approximate_age_unit is null or approximate_age_unit in ('months', 'years'));
 
 create table if not exists public.treatments (
   id uuid primary key default gen_random_uuid(),
@@ -87,6 +115,13 @@ create table if not exists public.pet_vaccines (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('pet-photos', 'pet-photos', true, 10485760)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit;
 
 create index if not exists pets_user_id_idx
   on public.pets(user_id);
@@ -266,5 +301,42 @@ create policy "Users can delete own pet vaccines"
 on public.pet_vaccines for delete
 to authenticated
 using (auth.uid() = user_id);
+
+drop policy if exists "Users can read pet photos" on storage.objects;
+create policy "Users can read pet photos"
+on storage.objects for select
+to public
+using (bucket_id = 'pet-photos');
+
+drop policy if exists "Users can upload pet photos" on storage.objects;
+create policy "Users can upload pet photos"
+on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'pet-photos'
+  and auth.uid()::text = (storage.foldername(name))[1]
+);
+
+drop policy if exists "Users can update own pet photos" on storage.objects;
+create policy "Users can update own pet photos"
+on storage.objects for update
+to authenticated
+using (
+  bucket_id = 'pet-photos'
+  and auth.uid()::text = (storage.foldername(name))[1]
+)
+with check (
+  bucket_id = 'pet-photos'
+  and auth.uid()::text = (storage.foldername(name))[1]
+);
+
+drop policy if exists "Users can delete own pet photos" on storage.objects;
+create policy "Users can delete own pet photos"
+on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'pet-photos'
+  and auth.uid()::text = (storage.foldername(name))[1]
+);
 
 notify pgrst, 'reload schema';

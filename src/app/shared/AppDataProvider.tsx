@@ -17,6 +17,7 @@ import {
   type CreatePetInput,
   type UpdatePetInput,
 } from '../services/petsService'
+import { petPhotoService } from '../services/petPhotoService'
 import {
   petVaccineService,
   type VaccineInput,
@@ -46,6 +47,7 @@ import { getFriendlyDataError } from './errors'
 type AppData = Pick<
   AppDataContextValue,
   'pets' | 'treatments' | 'doses' | 'history' | 'weightRecords' | 'vaccines'
+  | 'agendaDoses'
 > & {
   notificationDoses: Dose[]
 }
@@ -54,6 +56,7 @@ const emptyData: AppData = {
   pets: [],
   treatments: [],
   doses: [],
+  agendaDoses: [],
   history: [],
   weightRecords: [],
   vaccines: [],
@@ -61,6 +64,7 @@ const emptyData: AppData = {
 }
 
 const demoStorageKey = 'cuidapet:demo-data'
+const notificationPermissionPromptKey = 'cuidapet:notification-permission-prompted'
 
 type FutureDoseInfo = {
   id: string
@@ -104,6 +108,7 @@ function webNotificationResult(): NotificationScheduleResult {
   return {
     supported: false,
     permission: 'unsupported',
+    exactAlarm: 'unsupported',
     scheduled: 0,
     alreadyScheduled: 0,
     cancelled: 0,
@@ -134,10 +139,20 @@ function treatmentNotificationFeedback(
   }
 
   if (notificationResult.scheduled === 0) {
-    return `${doseSummary} Nenhum lembrete futuro novo foi agendado. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.`
+    const exactAlarmNotice =
+      notificationResult.exactAlarm === 'denied'
+        ? ' O Android pode atrasar lembretes; permita alarmes exatos no Perfil.'
+        : ''
+
+    return `${doseSummary} Nenhum lembrete futuro novo foi agendado. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.${exactAlarmNotice}`
   }
 
-  return `${doseSummary} ${notificationResult.scheduled} lembrete(s) futuro(s) agendado(s) automaticamente. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.`
+  const exactAlarmNotice =
+    notificationResult.exactAlarm === 'denied'
+      ? ' O Android pode atrasar lembretes; permita alarmes exatos no Perfil para maior precisão.'
+      : ''
+
+  return `${doseSummary} ${notificationResult.scheduled} lembrete(s) futuro(s) agendado(s) automaticamente. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.${exactAlarmNotice}`
 }
 
 async function scheduleNotificationsSafely(
@@ -161,6 +176,9 @@ async function scheduleNotificationsSafely(
         permission: notificationService.isSupported()
           ? 'prompt' as const
           : 'unsupported' as const,
+        exactAlarm: notificationService.isSupported()
+          ? 'prompt' as const
+          : 'unsupported' as const,
       },
     }
   }
@@ -182,6 +200,30 @@ async function cancelTreatmentNotificationsSafely(treatmentId: string) {
     // O tratamento continua salvo mesmo que o Android não permita
     // alterar os lembretes naquele momento.
   }
+}
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+      reject(new Error('Não foi possível preparar a foto para o modo demo.'))
+    })
+    reader.addEventListener('error', () => {
+      reject(new Error('Não foi possível preparar a foto para o modo demo.'))
+    })
+    reader.readAsDataURL(file)
+  })
+}
+
+async function resolveDemoPhotoUrl(
+  pet: Pick<CreatePetInput, 'photoFile' | 'photoUrl'>,
+) {
+  if (pet.photoFile) return fileToDataUrl(pet.photoFile)
+  return pet.photoUrl
 }
 
 function createDemoData(): AppData {
@@ -208,6 +250,9 @@ function createDemoData(): AppData {
         subspeciesOrMorph: null,
         breed: 'Golden Retriever',
         sex: 'Fêmea',
+        photoUrl: null,
+        approximateAge: null,
+        approximateAgeUnit: null,
         weightKg: 24,
         weightUnit: 'kg',
         birthDate: '2021-03-14',
@@ -222,6 +267,9 @@ function createDemoData(): AppData {
         subspeciesOrMorph: null,
         breed: 'SRD',
         sex: 'Macho',
+        photoUrl: null,
+        approximateAge: null,
+        approximateAgeUnit: null,
         weightKg: 5,
         weightUnit: 'kg',
         birthDate: '2022-09-02',
@@ -236,6 +284,9 @@ function createDemoData(): AppData {
         subspeciesOrMorph: 'Amelanística',
         breed: null,
         sex: 'Fêmea',
+        photoUrl: null,
+        approximateAge: null,
+        approximateAgeUnit: null,
         weightKg: 0.42,
         weightUnit: 'g',
         birthDate: '2023-11-10',
@@ -268,34 +319,39 @@ function createDemoData(): AppData {
       notes: null,
     }
 
+    const doses: Dose[] = [
+      {
+        ...baseDose,
+        id: 'demo-dose-morning',
+        scheduledAt: morning.toISOString(),
+        status: 'pending',
+        appliedAt: null,
+      },
+      {
+        ...baseDose,
+        id: 'demo-dose-evening',
+        scheduledAt: evening.toISOString(),
+        status: 'pending',
+        appliedAt: null,
+      },
+    ]
+
+    const history: Dose[] = [
+      {
+        ...baseDose,
+        id: 'demo-history-yesterday',
+        scheduledAt: yesterday.toISOString(),
+        status: 'applied',
+        appliedAt: new Date(yesterday.getTime() + 5 * 60 * 1000).toISOString(),
+      },
+    ]
+
     return {
       pets,
       treatments,
-      doses: [
-        {
-          ...baseDose,
-          id: 'demo-dose-morning',
-          scheduledAt: morning.toISOString(),
-          status: 'pending',
-          appliedAt: null,
-        },
-        {
-          ...baseDose,
-          id: 'demo-dose-evening',
-          scheduledAt: evening.toISOString(),
-          status: 'pending',
-          appliedAt: null,
-        },
-      ],
-      history: [
-        {
-          ...baseDose,
-          id: 'demo-history-yesterday',
-          scheduledAt: yesterday.toISOString(),
-          status: 'applied',
-          appliedAt: new Date(yesterday.getTime() + 5 * 60 * 1000).toISOString(),
-        },
-      ],
+      doses,
+      agendaDoses: [...doses, ...history],
+      history,
       weightRecords: [
         {
           id: 'demo-weight-luna',
@@ -373,10 +429,17 @@ export function AppDataProvider({ children }: PropsWithChildren) {
               specificSpecies: pet.specificSpecies ?? null,
               subspeciesOrMorph: pet.subspeciesOrMorph ?? null,
               sex: pet.sex ?? null,
+              photoUrl: pet.photoUrl ?? null,
+              approximateAge: pet.approximateAge ?? null,
+              approximateAgeUnit: pet.approximateAgeUnit ?? null,
               weightUnit: pet.weightUnit ?? 'kg',
             })),
             treatments: parsed.treatments ?? [],
             doses: parsed.doses ?? [],
+            agendaDoses: parsed.agendaDoses ?? [
+              ...(parsed.doses ?? []),
+              ...(parsed.history ?? []),
+            ],
             history: parsed.history ?? [],
             weightRecords: parsed.weightRecords ?? [],
             vaccines: parsed.vaccines ?? [],
@@ -413,6 +476,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         petRows,
         treatmentRows,
         doseRows,
+        agendaDoseRows,
         historyRows,
         weightRows,
         vaccineRows,
@@ -421,6 +485,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         petsService.list(user.id),
         treatmentsService.list(user.id),
         dosesService.listToday(user.id),
+        dosesService.listAgenda(user.id),
         dosesService.listHistory(user.id),
         petWeightService.list(user.id),
         petVaccineService.list(user.id),
@@ -436,6 +501,12 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         subspeciesOrMorph: pet.subspecies_or_morph,
         breed: pet.breed,
         sex: pet.sex,
+        photoUrl: pet.photo_url,
+        approximateAge: pet.approximate_age,
+        approximateAgeUnit:
+          pet.approximate_age_unit === 'months' || pet.approximate_age_unit === 'years'
+            ? pet.approximate_age_unit
+            : null,
         weightKg: pet.weight_kg,
         weightUnit: pet.weight_unit,
         birthDate: pet.birth_date,
@@ -481,6 +552,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         pets,
         treatments,
         doses: doseRows.map(mapDose),
+        agendaDoses: agendaDoseRows.map(mapDose),
         history: historyRows.map(mapDose),
         weightRecords: weightRows.map((record): WeightRecord => ({
           id: record.id,
@@ -527,12 +599,42 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     void refreshData()
   }, [refreshData])
 
+  useEffect(() => {
+    if (!user || !notificationService.isSupported()) return
+
+    const promptKey = `${notificationPermissionPromptKey}:${user.id}`
+    if (localStorage.getItem(promptKey) === 'done') return
+
+    let cancelled = false
+
+    async function requestNotificationPermissionOnce() {
+      const status = await notificationService.checkPermission()
+      if (cancelled) return
+
+      if (
+        status.permission === 'prompt' ||
+        status.permission === 'prompt-with-rationale'
+      ) {
+        await notificationService.requestPermission()
+      }
+
+      localStorage.setItem(promptKey, 'done')
+    }
+
+    void requestNotificationPermissionOnce().catch(() => undefined)
+
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
   const addPet = useCallback(
     async (pet: CreatePetInput) => {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
 
       if (isDemoMode) {
         const petId = `demo-pet-${crypto.randomUUID()}`
+        const photoUrl = await resolveDemoPhotoUrl(pet)
         const initialWeight: WeightRecord[] =
           pet.weightKg && pet.weightKg > 0
             ? [
@@ -557,6 +659,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
               subspeciesOrMorph: pet.subspeciesOrMorph,
               breed: pet.breed,
               sex: pet.sex,
+              photoUrl,
+              approximateAge: pet.approximateAge,
+              approximateAgeUnit: pet.approximateAgeUnit,
               weightKg: pet.weightKg,
               weightUnit: pet.weightUnit,
               birthDate: pet.birthDate,
@@ -572,7 +677,18 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         return
       }
 
-      const createdPet = await petsService.create(user.id, pet)
+      const createdPet = await petsService.create(user.id, {
+        ...pet,
+        photoUrl: pet.photoFile ? null : pet.photoUrl,
+      })
+      if (pet.photoFile) {
+        const photoUrl = await petPhotoService.upload(user.id, createdPet.id, pet.photoFile)
+        await petsService.update(user.id, createdPet.id, {
+          ...pet,
+          photoUrl,
+          photoFile: null,
+        })
+      }
       if (pet.weightKg && pet.weightKg > 0) {
         await petWeightService.create(user.id, createdPet.id, {
           weightKg: pet.weightKg,
@@ -591,6 +707,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
 
       if (isDemoMode) {
+        const photoUrl = await resolveDemoPhotoUrl(pet)
         const nextData: AppData = {
           ...data,
           pets: data.pets.map((currentPet) =>
@@ -604,6 +721,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
                   subspeciesOrMorph: pet.subspeciesOrMorph,
                   breed: pet.breed,
                   sex: pet.sex,
+                  photoUrl,
+                  approximateAge: pet.approximateAge,
+                  approximateAgeUnit: pet.approximateAgeUnit,
                   weightKg: pet.weightKg,
                   weightUnit: pet.weightUnit,
                   birthDate: pet.birthDate,
@@ -618,7 +738,14 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         return
       }
 
-      await petsService.update(user.id, petId, pet)
+      const photoUrl = pet.photoFile
+        ? await petPhotoService.upload(user.id, petId, pet.photoFile)
+        : pet.photoUrl
+      await petsService.update(user.id, petId, {
+        ...pet,
+        photoUrl,
+        photoFile: null,
+      })
       await refreshData()
       setFeedback({ type: 'success', message: 'Dados do pet atualizados.' })
     },
@@ -639,6 +766,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           pets: data.pets.filter((pet) => pet.id !== petId),
           treatments: data.treatments.filter((treatment) => treatment.petId !== petId),
           doses: data.doses.filter(
+            (dose) => dose.petId !== petId && !treatmentIds.has(dose.treatmentId),
+          ),
+          agendaDoses: data.agendaDoses.filter(
             (dose) => dose.petId !== petId && !treatmentIds.has(dose.treatmentId),
           ),
           history: data.history.filter(
@@ -729,6 +859,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           ...data,
           treatments: [newTreatment, ...data.treatments],
           doses: [...data.doses, ...newDoses].sort((a, b) =>
+            a.scheduledAt.localeCompare(b.scheduledAt),
+          ),
+          agendaDoses: [...data.agendaDoses, ...allNewDoses].sort((a, b) =>
             a.scheduledAt.localeCompare(b.scheduledAt),
           ),
           notificationDoses: [
@@ -945,6 +1078,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           doses: data.doses.filter(
             (dose) => dose.treatmentId !== treatmentId,
           ),
+          agendaDoses: data.agendaDoses.filter(
+            (dose) => dose.treatmentId !== treatmentId,
+          ),
           history: data.history.filter(
             (dose) => dose.treatmentId !== treatmentId,
           ),
@@ -984,6 +1120,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         const nextData: AppData = {
           ...data,
           doses: data.doses.map((dose) => (dose.id === doseId ? updatedDose : dose)),
+          agendaDoses: data.agendaDoses.map((dose) =>
+            dose.id === doseId ? updatedDose : dose,
+          ),
           history: [
             updatedDose,
             ...data.history.filter((dose) => dose.id !== doseId),

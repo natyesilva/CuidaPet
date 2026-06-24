@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  CalendarDays,
   Check,
   Edit3,
   HeartPulse,
@@ -17,8 +18,12 @@ import { Link, useParams } from 'react-router-dom'
 import type { CreatePetInput } from '../../services/petsService'
 import type { Vaccine } from '../../shared/app-data-context'
 import { useAppData } from '../../shared/app-data-context'
+import { CareEventList } from '../../shared/CareEventList'
+import { buildCareEvents } from '../../shared/careEvents'
 import { formatDaysAgo, formatShortDate } from '../../shared/date'
 import { getFriendlyDataError } from '../../shared/errors'
+import { formatApproximateAge } from '../../shared/pet'
+import { PetAvatar } from '../../shared/PetAvatar'
 import {
   DataError,
   DataLoading,
@@ -30,10 +35,11 @@ import {
 import { formatWeight, parseWeightInput } from '../../shared/weight'
 import { PetForm } from './PetForm'
 
-type DetailTab = 'general' | 'treatments' | 'vaccines' | 'weight'
+type DetailTab = 'general' | 'calendar' | 'treatments' | 'vaccines' | 'weight'
 
 const tabs: Array<{ id: DetailTab; label: string }> = [
   { id: 'general', label: 'Dados gerais' },
+  { id: 'calendar', label: 'Agenda' },
   { id: 'treatments', label: 'Tratamentos' },
   { id: 'vaccines', label: 'Vacinas' },
   { id: 'weight', label: 'Peso' },
@@ -166,6 +172,7 @@ export function PetDetailPage() {
     getPet,
     getPetWeights,
     getPetVaccines,
+    agendaDoses,
     treatments,
     isLoading,
     loadError,
@@ -193,6 +200,12 @@ export function PetDetailPage() {
   const weights = getPetWeights(petId)
   const vaccines = getPetVaccines(petId)
   const petTreatments = treatments.filter((treatment) => treatment.petId === petId)
+  const petAgendaEvents = buildCareEvents({
+    doses: agendaDoses,
+    vaccines,
+    weightRecords: weights,
+    petId,
+  })
   const today = localDate()
   const petClassification = pet
     ? [
@@ -201,6 +214,9 @@ export function PetDetailPage() {
         pet.subspeciesOrMorph,
       ].filter(Boolean)
     : []
+  const approximateAge = pet
+    ? formatApproximateAge(pet.approximateAge, pet.approximateAgeUnit)
+    : ''
 
   async function handlePetSubmit(input: CreatePetInput) {
     setIsSaving(true)
@@ -311,6 +327,7 @@ export function PetDetailPage() {
             ? petClassification.join(' • ')
             : pet.breed || 'Companheiro cadastrado no CuidaPet'
         }
+        action={<PetAvatar pet={pet} size="xl" />}
       />
 
       {feedback && <FeedbackBanner {...feedback} onDismiss={clearFeedback} />}
@@ -358,6 +375,7 @@ export function PetDetailPage() {
                     'Nascimento',
                     pet.birthDate ? formatShortDate(pet.birthDate) : 'Não informado',
                   ],
+                  ['Idade aproximada', approximateAge || 'Não informada'],
                   [
                     'Último peso',
                     weights[0]
@@ -432,6 +450,22 @@ export function PetDetailPage() {
               </article>
             ))
           )}
+        </div>
+      )}
+
+      {activeTab === 'calendar' && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-4 text-brand-900">
+            <CalendarDays className="mt-0.5 size-5 shrink-0" />
+            <p className="text-sm leading-6">
+              Agenda completa de {pet.name}: remédios, vacinas e registros de peso em uma linha do tempo.
+            </p>
+          </div>
+          <CareEventList
+            events={petAgendaEvents}
+            emptyTitle="Agenda vazia"
+            emptyDescription="Cadastre tratamentos, vacinas ou pesos para acompanhar a rotina deste pet."
+          />
         </div>
       )}
 

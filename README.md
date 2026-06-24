@@ -15,6 +15,7 @@ O projeto reúne duas experiências no mesmo frontend React:
 - Supabase Auth e banco da lista de espera
 - Lucide React
 - Capacitor 7 para Android
+- Capacitor Camera para foto dos pets
 - Capacitor Local Notifications para lembretes de doses
 - Vitest, Testing Library e Playwright para testes automatizados
 
@@ -108,6 +109,12 @@ Para aplicá-lo:
 
 O script também cria índices, validações, atualização automática de `updated_at`, ativa Row Level Security e adiciona policies para `select`, `insert`, `update` e `delete` limitadas por `auth.uid() = user_id`.
 
+Se você já executou uma versão anterior do schema, pode rodar `supabase/app-schema.sql` novamente. O script adiciona os novos campos opcionais de pets sem apagar dados existentes:
+
+- `photo_url`;
+- `approximate_age`;
+- `approximate_age_unit`.
+
 Depois de aplicar o SQL, entre no app com uma conta real do Supabase. Cadastros e alterações serão persistidos no banco e ficarão isolados por usuário.
 
 ### Modelo de cadastro de pets
@@ -122,7 +129,9 @@ A tabela `pets` mantém compatibilidade com dados antigos: o campo `species` con
 | `subspecies_or_morph` | subespécie, morfo, linhagem ou variação, como `Albina`, `Lutino`, `Dumbo` |
 | `breed` | raça ou tipo quando fizer sentido |
 | `sex` | sexo informado livremente |
-| `weight_kg` + `weight_unit` | peso normalizado em kg e unidade preferida para exibição |
+| `photo_url` | URL pública da foto do pet no Supabase Storage |
+| `birth_date` ou `approximate_age` + `approximate_age_unit` | o formulário pede escolher uma das duas formas de informar idade |
+| `weight_kg` + `weight_unit` | peso atual obrigatório no formulário, normalizado em kg e com unidade preferida para exibição |
 
 Todos os campos de classificação no app funcionam como autocomplete livre: as sugestões ajudam, mas não bloqueiam textos personalizados. Se o schema antigo já foi executado, pode executar novamente o arquivo `supabase/app-schema.sql`; ele usa `add column if not exists` para adicionar os novos campos sem apagar registros existentes.
 
@@ -131,6 +140,62 @@ Se você já tem as tabelas antigas criadas e quer aplicar apenas os novos campo
 ```text
 supabase/pets-exotic-migration.sql
 ```
+
+### Fotos dos pets
+
+O app salva no banco apenas a URL da imagem, no campo `pets.photo_url`. A imagem deve ficar no Supabase Storage.
+
+Bucket usado pelo app:
+
+```text
+pet-photos
+```
+
+O arquivo `supabase/app-schema.sql` já cria esse bucket como público para leitura e adiciona policies para usuários autenticados enviarem, atualizarem e removerem arquivos dentro da própria pasta `{user_id}`.
+
+Se as tabelas já existem e você precisa corrigir apenas o envio de fotos, execute somente:
+
+```text
+supabase/pet-photos-storage.sql
+```
+
+Se preferir aplicar apenas a configuração de Storage manualmente, use:
+
+```sql
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('pet-photos', 'pet-photos', true, 10485760)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit;
+
+create policy "Users can upload pet photos"
+on storage.objects
+for insert
+to authenticated
+with check (bucket_id = 'pet-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+
+create policy "Users can update own pet photos"
+on storage.objects
+for update
+to authenticated
+using (bucket_id = 'pet-photos' and auth.uid()::text = (storage.foldername(name))[1])
+with check (bucket_id = 'pet-photos' and auth.uid()::text = (storage.foldername(name))[1]);
+
+create policy "Users can read pet photos"
+on storage.objects
+for select
+to public
+using (bucket_id = 'pet-photos');
+```
+
+As fotos são enviadas para caminhos no formato:
+
+```text
+{user_id}/{pet_id}/{arquivo}
+```
+
+O app não salva base64 no banco.
 
 ## Rotas do MVP
 
@@ -305,6 +370,8 @@ npm run android:sync
 
 Esse comando gera o build web e copia o conteúdo de `dist` para o projeto Android.
 
+Depois de instalar ou atualizar plugins do Capacitor, como câmera ou notificações, rode também esse comando para atualizar os arquivos nativos.
+
 ### Abrir no Android Studio
 
 ```bash
@@ -339,13 +406,33 @@ android/app/build/outputs/apk/debug/app-debug.apk
 ### Notificações locais
 
 No aplicativo Android, a criação de um tratamento agenda lembretes locais para
-as doses futuras. O app solicita a permissão de notificações no primeiro
-agendamento e permite consultar ou sincronizar os lembretes na tela
-**Perfil**.
+as doses futuras imediatamente, usando o canal Android `treatment-reminders`
+com importância alta. O app solicita a permissão de notificações no primeiro
+acesso após login ou antes do primeiro agendamento e permite consultar ou
+sincronizar os lembretes na tela **Perfil**.
 
 No Android 12 ou superior, também é recomendável permitir **alarmes e
 lembretes exatos** nas configurações do CuidaPet. A versão web apresenta um
 fallback informativo e não agenda notificações no navegador.
+
+Permissões Android usadas:
+
+- `POST_NOTIFICATIONS`: necessária no Android 13+ para exibir notificações.
+- `SCHEDULE_EXACT_ALARM`: usada para melhorar a precisão dos lembretes de remédio quando o usuário permite alarmes exatos.
+
+O app não usa `USE_EXACT_ALARM` nesta versão. Se o Android negar alarmes
+exatos, os lembretes continuam sendo agendados, mas podem sofrer atraso por
+políticas do sistema, economia de bateria ou modo Doze.
+
+Teste manual recomendado no Android real:
+
+1. Instale um APK limpo.
+2. Faça login e permita notificações.
+3. Crie um pet.
+4. Crie um tratamento com dose para daqui 2 minutos.
+5. Feche o app e bloqueie o celular.
+6. Confirme se a notificação aparece no horário.
+7. Reabra o app, sincronize lembretes no Perfil e confira se a contagem não duplicou.
 
 As variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` são incorporadas ao bundle durante `npm run build`; confirme que o `.env.local` está configurado antes da sincronização.
 

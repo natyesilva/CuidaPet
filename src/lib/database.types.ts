@@ -63,12 +63,15 @@ export type Database = {
       pets: {
         Row: {
           animal_group: string | null
+          approximate_age: number | null
+          approximate_age_unit: string | null
           birth_date: string | null
           breed: string | null
           created_at: string
           id: string
           name: string
           notes: string | null
+          photo_url: string | null
           sex: string | null
           species: string
           specific_species: string | null
@@ -80,12 +83,15 @@ export type Database = {
         }
         Insert: {
           animal_group?: string | null
+          approximate_age?: number | null
+          approximate_age_unit?: string | null
           birth_date?: string | null
           breed?: string | null
           created_at?: string
           id?: string
           name: string
           notes?: string | null
+          photo_url?: string | null
           sex?: string | null
           species: string
           specific_species?: string | null
@@ -97,12 +103,15 @@ export type Database = {
         }
         Update: {
           animal_group?: string | null
+          approximate_age?: number | null
+          approximate_age_unit?: string | null
           birth_date?: string | null
           breed?: string | null
           created_at?: string
           id?: string
           name?: string
           notes?: string | null
+          photo_url?: string | null
           sex?: string | null
           species?: string
           specific_species?: string | null

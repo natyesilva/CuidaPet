@@ -1,6 +1,8 @@
 import { Check, CheckCircle2, Clock3, LoaderCircle, Pill, RotateCcw, X } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAppData, type Dose } from '../../shared/app-data-context'
+import { CareEventList } from '../../shared/CareEventList'
+import { buildCareEvents } from '../../shared/careEvents'
 import { formatTime } from '../../shared/date'
 import { getFriendlyDataError } from '../../shared/errors'
 import {
@@ -111,6 +113,10 @@ function DoseCard({
 export function TodayPage() {
   const {
     doses,
+    agendaDoses,
+    vaccines,
+    weightRecords,
+    getPet,
     isLoading,
     loadError,
     feedback,
@@ -118,6 +124,7 @@ export function TodayPage() {
     updateDoseStatus,
     refreshData,
   } = useAppData()
+  const [view, setView] = useState<'today' | 'calendar'>('today')
   const [updatingId, setUpdatingId] = useState('')
   const [actionError, setActionError] = useState('')
   const completed = doses.filter((dose) => dose.status !== 'pending').length
@@ -126,6 +133,15 @@ export function TodayPage() {
     day: '2-digit',
     month: 'long',
   }).format(new Date())
+  const calendarEvents = useMemo(
+    () =>
+      buildCareEvents({
+        doses: agendaDoses,
+        vaccines,
+        weightRecords,
+      }),
+    [agendaDoses, vaccines, weightRecords],
+  )
 
   async function handleUpdate(
     doseId: string,
@@ -153,10 +169,38 @@ export function TodayPage() {
       {feedback && <FeedbackBanner {...feedback} onDismiss={clearFeedback} />}
       {actionError && <FeedbackBanner type="error" message={actionError} />}
 
+      <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white p-1 shadow-sm ring-1 ring-slate-100">
+        {[
+          ['today', 'Hoje'],
+          ['calendar', 'Calendário geral'],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setView(id as 'today' | 'calendar')}
+            className={`focus-ring rounded-xl px-3 py-2.5 text-xs font-extrabold transition ${
+              view === id
+                ? 'bg-brand-600 text-white shadow-sm'
+                : 'text-slate-500 hover:bg-slate-50'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
         <DataLoading label="Carregando doses de hoje..." />
       ) : loadError ? (
         <DataError message={loadError} onRetry={() => void refreshData()} />
+      ) : view === 'calendar' ? (
+        <CareEventList
+          events={calendarEvents}
+          getPet={getPet}
+          showPetName
+          emptyTitle="Calendário vazio"
+          emptyDescription="Cadastre tratamentos, vacinas ou pesos para montar a agenda geral."
+        />
       ) : (
         <>
           {doses.length > 0 && (
