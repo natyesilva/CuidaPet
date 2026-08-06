@@ -23,6 +23,12 @@ async function chooseFromCombobox(buttonLabel: string, optionName: string) {
   await user.click(screen.getByRole('option', { name: optionName }))
 }
 
+async function fillRequiredHealthFields() {
+  const user = userEvent.setup()
+  await user.type(screen.getByLabelText(/^Peso atual/), '1,2')
+  await user.type(screen.getByLabelText(/^Idade aproximada/), '2')
+}
+
 describe('PetForm', () => {
   it('filtra species e specific_species conforme escolhas anteriores', async () => {
     renderPetForm()
@@ -86,6 +92,7 @@ describe('PetForm', () => {
       screen.getByLabelText(/^Espécie popular ou tipo principal/),
       'Cachorro',
     )
+    await fillRequiredHealthFields()
     await user.click(screen.getByRole('button', { name: 'Salvar pet' }))
 
     expect(
@@ -107,6 +114,7 @@ describe('PetForm', () => {
       'Axolote',
     )
     await user.type(screen.getByLabelText(/^Espécie específica/), 'Albino')
+    await fillRequiredHealthFields()
     await user.click(screen.getByRole('button', { name: 'Salvar pet' }))
 
     expect(onSubmit).toHaveBeenCalledWith(

@@ -16,7 +16,19 @@ const demoStorageKey = 'cuidapet:demo-session'
 const demoUser: AppUser = {
   id: 'cuidapet-demo-master',
   email: 'test@cuidapet.local',
-  user_metadata: { name: 'Test' },
+  user_metadata: { name: 'Natália' },
+}
+
+function getPasswordResetRedirectUrl() {
+  const configuredUrl = import.meta.env.VITE_PASSWORD_RESET_REDIRECT_URL
+
+  if (typeof configuredUrl === 'string' && configuredUrl.trim()) {
+    return configuredUrl.trim()
+  }
+
+  if (typeof window === 'undefined') return undefined
+
+  return `${window.location.origin}/app/reset-password`
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -117,6 +129,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
         if (error) throw error
         setSession(data.session)
         return { needsEmailConfirmation: !data.session }
+      },
+      async requestPasswordReset(email) {
+        localStorage.removeItem(demoStorageKey)
+        setIsDemoMode(false)
+
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          email.trim().toLowerCase(),
+          {
+            redirectTo: getPasswordResetRedirectUrl(),
+          },
+        )
+
+        if (error) throw error
+      },
+      async updatePassword(password) {
+        localStorage.removeItem(demoStorageKey)
+        setIsDemoMode(false)
+
+        const { error } = await supabase.auth.updateUser({ password })
+        if (error) throw error
       },
       async signOut() {
         if (isDemoMode) {

@@ -162,6 +162,15 @@ function AuthPage({ mode }: AuthPageProps) {
               </span>
             </label>
 
+            {!isRegister && (
+              <Link
+                to="/app/forgot-password"
+                className="focus-ring -mt-3 inline-flex rounded-md text-sm font-bold text-brand-700 hover:text-brand-800"
+              >
+                Esqueci minha senha
+              </Link>
+            )}
+
             {errorMessage && (
               <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700" role="alert">
                 {errorMessage}

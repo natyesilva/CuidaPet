@@ -3,10 +3,13 @@ import {
   type PendingLocalNotificationSchema,
 } from '@capacitor/local-notifications'
 import { Capacitor, type PermissionState } from '@capacitor/core'
+import { formatDose } from '../../shared/treatment'
 
 const notificationSource = 'cuidapet-dose-reminder'
 const notificationTestSource = 'cuidapet-test-notification'
-const notificationChannelId = 'treatment-reminders'
+const notificationChannelVersion = 2
+const notificationChannelId = 'treatment-reminders-v2'
+const notificationSoundFile = 'cuidapet_reminder.wav'
 const notificationIcon = 'ic_stat_cuidapet'
 const notificationIconColor = '#22C7B8'
 const testNotificationId = 762307
@@ -43,6 +46,8 @@ export type NotificationScheduleResult = {
 type NotificationExtra = {
   source?: string
   notificationKind?: 'treatment-dose' | 'test'
+  notificationChannelId?: string
+  notificationChannelVersion?: number
   doseScheduleId?: string
   treatmentId?: string
   petId?: string
@@ -80,6 +85,16 @@ function isCuidaPetNotification(
 
 function getExtra(notification: PendingLocalNotificationSchema) {
   return notification.extra as NotificationExtra | undefined
+}
+
+function usesCurrentReminderChannel(
+  notification: PendingLocalNotificationSchema,
+) {
+  const extra = getExtra(notification)
+  return (
+    extra?.notificationChannelId === notificationChannelId &&
+    extra?.notificationChannelVersion === notificationChannelVersion
+  )
 }
 
 function baseScheduleResult(
@@ -130,7 +145,7 @@ export function notificationIdFromDoseNotification(
 }
 
 function toLocalNotification(input: DoseNotificationInput) {
-  const body = `${input.petName}: ${input.medicationName} - ${input.dose} ${input.doseUnit}`
+  const body = `${input.petName}: ${input.medicationName} - ${formatDose(input.dose, input.doseUnit)}`
 
   return {
     id: notificationIdFromDoseNotification(input),
@@ -142,6 +157,7 @@ function toLocalNotification(input: DoseNotificationInput) {
       at: new Date(input.scheduledAt),
       allowWhileIdle: true,
     },
+    sound: notificationSoundFile,
     channelId: notificationChannelId,
     smallIcon: notificationIcon,
     iconColor: notificationIconColor,
@@ -149,6 +165,8 @@ function toLocalNotification(input: DoseNotificationInput) {
     extra: {
       source: notificationSource,
       notificationKind: 'treatment-dose',
+      notificationChannelId,
+      notificationChannelVersion,
       doseScheduleId: input.doseScheduleId,
       treatmentId: input.treatmentId,
       petId: input.petId,
@@ -166,6 +184,7 @@ async function ensureReminderChannel() {
       name: 'Lembretes de tratamento',
       description:
         'Notificações de horários de remédios e tratamentos dos pets.',
+      sound: notificationSoundFile,
       importance: 4,
       visibility: 1,
       lights: true,
@@ -292,7 +311,22 @@ export const notificationService = {
     }
 
     const futureDoses = getFutureDoses(doses)
-    const pendingIds = new Set(pending.map(({ id }) => id))
+    const futureIds = new Set(
+      futureDoses.map((dose) => notificationIdFromDoseNotification(dose)),
+    )
+    const staleChannel = pending.filter(
+      (notification) =>
+        futureIds.has(notification.id) &&
+        !usesCurrentReminderChannel(notification),
+    )
+    const staleChannelIds = new Set(staleChannel.map(({ id }) => id))
+    const cancelled = await cancelNotifications(staleChannel)
+    const currentPending = pending.filter(
+      (notification) =>
+        !staleChannelIds.has(notification.id) &&
+        usesCurrentReminderChannel(notification),
+    )
+    const pendingIds = new Set(currentPending.map(({ id }) => id))
     const missing = futureDoses.filter(
       (dose) => !pendingIds.has(notificationIdFromDoseNotification(dose)),
     )
@@ -302,6 +336,7 @@ export const notificationService = {
       future: futureDoses.length,
       missing: missing.length,
       alreadyScheduled: futureDoses.length - missing.length,
+      staleChannel: staleChannel.length,
       exactAlarm: status.exactAlarm,
     })
 
@@ -334,6 +369,7 @@ export const notificationService = {
       exactAlarm: status.exactAlarm,
       scheduled: missing.length,
       alreadyScheduled: futureDoses.length - missing.length,
+      cancelled,
       pending: nextPending.length,
     })
   },
@@ -393,10 +429,19 @@ export const notificationService = {
     const obsolete = pending.filter(
       (notification) => !desiredIds.has(notification.id),
     )
-    const cancelled = await cancelNotifications(obsolete)
+    const staleChannel = pending.filter(
+      (notification) =>
+        desiredIds.has(notification.id) &&
+        !usesCurrentReminderChannel(notification),
+    )
+    const cancelled = await cancelNotifications([...obsolete, ...staleChannel])
     const currentIds = new Set(
       pending
-        .filter((notification) => desiredIds.has(notification.id))
+        .filter(
+          (notification) =>
+            desiredIds.has(notification.id) &&
+            usesCurrentReminderChannel(notification),
+        )
         .map(({ id }) => id),
     )
     const missing = futureDoses.filter(
@@ -407,6 +452,7 @@ export const notificationService = {
       future: futureDoses.length,
       pendingBefore: pending.length,
       obsolete: obsolete.length,
+      staleChannel: staleChannel.length,
       missing: missing.length,
     })
 
@@ -450,6 +496,7 @@ export const notificationService = {
             at: new Date(Date.now() + 60_000),
             allowWhileIdle: true,
           },
+          sound: notificationSoundFile,
           channelId: notificationChannelId,
           smallIcon: notificationIcon,
           iconColor: notificationIconColor,
@@ -457,6 +504,8 @@ export const notificationService = {
           extra: {
             source: notificationTestSource,
             notificationKind: 'test',
+            notificationChannelId,
+            notificationChannelVersion,
           },
         },
       ],

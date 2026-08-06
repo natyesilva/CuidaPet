@@ -60,6 +60,20 @@ export const dosesService = {
     return data
   },
 
+  async removePendingForTreatment(
+    userId: string,
+    treatmentId: string,
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('dose_schedules')
+      .delete()
+      .eq('user_id', userId)
+      .eq('treatment_id', treatmentId)
+      .eq('status', 'pending')
+
+    if (error) throw error
+  },
+
   async listAgenda(userId: string): Promise<DoseRow[]> {
     const start = new Date()
     start.setDate(start.getDate() - 30)

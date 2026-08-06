@@ -4,6 +4,7 @@ import type { CreatePetInput, UpdatePetInput } from '../services/petsService'
 import type { CreateWeightInput } from '../services/petWeightService'
 import type { VaccineInput } from '../services/petVaccineService'
 import type { CreateTreatmentInput } from '../services/treatmentsService'
+import type { VeterinarianInput } from '../services/veterinariansService'
 
 export type Pet = {
   id: string
@@ -30,11 +31,24 @@ export type Treatment = {
   dose: string
   doseUnit: string
   frequencyHours: number
+  frequencyLabel: string | null
   startAt: string
   endAt: string
   instructions: string | null
+  veterinarianId: string | null
   veterinarianName: string | null
   status: string
+}
+
+export type Veterinarian = {
+  id: string
+  name: string
+  clinicName: string | null
+  phone: string | null
+  whatsapp: string | null
+  email: string | null
+  specialty: string | null
+  notes: string | null
 }
 
 export type WeightRecord = {
@@ -84,6 +98,7 @@ export type AppDataContextValue = {
   history: Dose[]
   weightRecords: WeightRecord[]
   vaccines: Vaccine[]
+  veterinarians: Veterinarian[]
   isLoading: boolean
   loadError: string
   feedback: AppFeedback | null
@@ -91,9 +106,16 @@ export type AppDataContextValue = {
   updatePet: (petId: string, pet: UpdatePetInput) => Promise<void>
   deletePet: (petId: string) => Promise<void>
   addWeight: (petId: string, input: CreateWeightInput) => Promise<void>
+  updateWeight: (weightId: string, input: CreateWeightInput) => Promise<void>
   addVaccine: (petId: string, input: VaccineInput) => Promise<void>
   updateVaccine: (vaccineId: string, input: VaccineInput) => Promise<void>
   deleteVaccine: (vaccineId: string) => Promise<void>
+  addVeterinarian: (input: VeterinarianInput) => Promise<void>
+  updateVeterinarian: (
+    veterinarianId: string,
+    input: VeterinarianInput,
+  ) => Promise<void>
+  deleteVeterinarian: (veterinarianId: string) => Promise<void>
   addTreatment: (treatment: CreateTreatmentInput) => Promise<void>
   changeTreatmentStatus: (
     treatmentId: string,
@@ -109,6 +131,7 @@ export type AppDataContextValue = {
   clearFeedback: () => void
   getPet: (petId: string) => Pet | undefined
   getTreatment: (treatmentId: string) => Treatment | undefined
+  getVeterinarian: (veterinarianId: string | null) => Veterinarian | undefined
   getPetWeights: (petId: string) => WeightRecord[]
   getPetVaccines: (petId: string) => Vaccine[]
 }

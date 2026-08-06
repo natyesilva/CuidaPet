@@ -11,14 +11,18 @@ export function weightFromKg(valueKg: number, unit: string | null | undefined) {
   return unit === 'g' ? valueKg * 1000 : valueKg
 }
 
-export function formatWeightKg(value: number) {
+function formatWeightNumber(value: number, unit: 'kg' | 'g') {
   return new Intl.NumberFormat('pt-BR', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
+    maximumFractionDigits: unit === 'g' ? 0 : 3,
   }).format(value)
+}
+
+export function formatWeightKg(value: number) {
+  return formatWeightNumber(value, 'kg')
 }
 
 export function formatWeight(valueKg: number, unit: string | null | undefined = 'kg') {
   const displayUnit = unit === 'g' ? 'g' : 'kg'
-  return `${formatWeightKg(weightFromKg(valueKg, displayUnit))} ${displayUnit}`
+  return `${formatWeightNumber(weightFromKg(valueKg, displayUnit), displayUnit)} ${displayUnit}`
 }

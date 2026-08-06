@@ -5,6 +5,7 @@ import { CareEventList } from '../../shared/CareEventList'
 import { buildCareEvents } from '../../shared/careEvents'
 import { formatTime } from '../../shared/date'
 import { getFriendlyDataError } from '../../shared/errors'
+import { formatDose } from '../../shared/treatment'
 import {
   DataError,
   DataLoading,
@@ -65,7 +66,7 @@ function DoseCard({
             {dose.medicationName}
           </h2>
           <p className="mt-1 text-sm font-semibold text-brand-700">
-            {pet?.name ?? 'Pet'} · {dose.dose} {dose.doseUnit}
+            {pet?.name ?? 'Pet'} · {formatDose(dose.dose, dose.doseUnit)}
           </p>
           {isCompleted && (
             <p className="mt-2 text-xs font-bold text-slate-400">
@@ -112,6 +113,7 @@ function DoseCard({
 
 export function TodayPage() {
   const {
+    pets,
     doses,
     agendaDoses,
     vaccines,
@@ -139,8 +141,9 @@ export function TodayPage() {
         doses: agendaDoses,
         vaccines,
         weightRecords,
+        pets,
       }),
-    [agendaDoses, vaccines, weightRecords],
+    [agendaDoses, pets, vaccines, weightRecords],
   )
 
   async function handleUpdate(

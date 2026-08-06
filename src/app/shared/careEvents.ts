@@ -1,4 +1,6 @@
-import type { Dose, Vaccine, WeightRecord } from './app-data-context'
+import type { Dose, Pet, Vaccine, WeightRecord } from './app-data-context'
+import { formatDose } from './treatment'
+import { formatWeight } from './weight'
 
 export type CareEventType = 'dose' | 'vaccine' | 'weight'
 
@@ -16,6 +18,7 @@ type BuildCareEventsInput = {
   doses: Dose[]
   vaccines: Vaccine[]
   weightRecords: WeightRecord[]
+  pets?: Pick<Pet, 'id' | 'weightUnit'>[]
   petId?: string
 }
 
@@ -39,9 +42,11 @@ export function buildCareEvents({
   doses,
   vaccines,
   weightRecords,
+  pets = [],
   petId,
 }: BuildCareEventsInput) {
   const petFilter = (currentPetId: string) => !petId || currentPetId === petId
+  const petWeightUnits = new Map(pets.map((pet) => [pet.id, pet.weightUnit]))
 
   const doseEvents: CareEvent[] = doses
     .filter((dose) => petFilter(dose.petId))
@@ -50,7 +55,7 @@ export function buildCareEvents({
       petId: dose.petId,
       type: 'dose',
       title: dose.medicationName,
-      description: `${dose.dose} ${dose.doseUnit}`,
+      description: formatDose(dose.dose, dose.doseUnit),
       dateTime: dose.scheduledAt,
       status: dose.status,
     }))
@@ -98,7 +103,7 @@ export function buildCareEvents({
       petId: record.petId,
       type: 'weight',
       title: 'Peso registrado',
-      description: `${record.weightKg.toLocaleString('pt-BR')} kg`,
+      description: formatWeight(record.weightKg, petWeightUnits.get(record.petId)),
       dateTime: dateAtNoon(record.recordedAt),
       status: 'done',
     }))

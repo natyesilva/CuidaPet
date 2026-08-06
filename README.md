@@ -45,9 +45,12 @@ Configure:
 ```env
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=sua_chave_publicavel
+VITE_PASSWORD_RESET_REDIRECT_URL=https://seu-dominio.com/app/reset-password
 ```
 
 Use somente a chave pública/publicável (`anon` ou `publishable`) no frontend. Nunca exponha a chave `service_role`.
+
+`VITE_PASSWORD_RESET_REDIRECT_URL` é opcional em desenvolvimento. Se não for definida, o app usa a origem atual com `/app/reset-password`. Em produção, configure essa URL para o domínio onde o link de redefinição de senha deve abrir.
 
 ## Executar localmente
 
@@ -68,6 +71,7 @@ O MVP usa o Supabase Auth para:
 
 - cadastro com e-mail e senha;
 - login com e-mail e senha;
+- recuperação de senha por link enviado por e-mail;
 - persistência e renovação da sessão;
 - logout.
 
@@ -82,7 +86,9 @@ Esse modo mantém dados de exemplo apenas no armazenamento local do aparelho e n
 
 Em **Supabase → Authentication → Providers**, mantenha o provedor de e-mail habilitado. Se a confirmação de e-mail estiver ativa, o usuário precisará confirmar o endereço antes do primeiro login.
 
-Para contas autenticadas pelo Supabase, pets, tratamentos, agenda, histórico, pesos e vacinas usam dados reais das tabelas `pets`, `treatments`, `dose_schedules`, `pet_weight_records` e `pet_vaccines`. As chamadas estão centralizadas em `src/app/services`, e os componentes consomem a camada `AppDataProvider`.
+Para recuperação de senha, libere a URL final em **Supabase → Authentication → URL Configuration → Redirect URLs**. Para desenvolvimento local, use `http://localhost:5173/app/reset-password`. Para a versão publicada, use o valor configurado em `VITE_PASSWORD_RESET_REDIRECT_URL`.
+
+Para contas autenticadas pelo Supabase, pets, tratamentos, agenda, histórico, pesos, vacinas e veterinários usam dados reais das tabelas `pets`, `treatments`, `dose_schedules`, `pet_weight_records`, `pet_vaccines` e `veterinarians`. As chamadas estão centralizadas em `src/app/services`, e os componentes consomem a camada `AppDataProvider`.
 
 O acesso local `Test`/`Admin123` continua isolado como demonstração e não lê nem grava dados no Supabase.
 
@@ -105,15 +111,19 @@ Para aplicá-lo:
    - `treatments`;
    - `dose_schedules`;
    - `pet_weight_records`;
-   - `pet_vaccines`.
+   - `pet_vaccines`;
+   - `veterinarians`.
 
 O script também cria índices, validações, atualização automática de `updated_at`, ativa Row Level Security e adiciona policies para `select`, `insert`, `update` e `delete` limitadas por `auth.uid() = user_id`.
 
-Se você já executou uma versão anterior do schema, pode rodar `supabase/app-schema.sql` novamente. O script adiciona os novos campos opcionais de pets sem apagar dados existentes:
+Se você já executou uma versão anterior do schema, pode rodar `supabase/app-schema.sql` novamente. O script usa `create table if not exists` e `add column if not exists` para evoluir o banco sem apagar dados existentes:
 
 - `photo_url`;
 - `approximate_age`;
 - `approximate_age_unit`.
+- `treatments.veterinarian_id`;
+- `treatments.frequency_label`;
+- tabela `veterinarians`, com soft delete via `deleted_at`.
 
 Depois de aplicar o SQL, entre no app com uma conta real do Supabase. Cadastros e alterações serão persistidos no banco e ficarão isolados por usuário.
 
@@ -134,6 +144,20 @@ A tabela `pets` mantém compatibilidade com dados antigos: o campo `species` con
 | `weight_kg` + `weight_unit` | peso atual obrigatório no formulário, normalizado em kg e com unidade preferida para exibição |
 
 Todos os campos de classificação no app funcionam como autocomplete livre: as sugestões ajudam, mas não bloqueiam textos personalizados. Se o schema antigo já foi executado, pode executar novamente o arquivo `supabase/app-schema.sql`; ele usa `add column if not exists` para adicionar os novos campos sem apagar registros existentes.
+
+### Tratamentos e veterinários
+
+O modelo de tratamentos continua incremental: `treatments.pet_id` é mantido. Quando a usuária seleciona mais de um pet no cadastro, o app cria um tratamento separado para cada pet selecionado, preservando agenda, histórico e cancelamento individual.
+
+O cadastro de tratamento oferece frequências pré-cadastradas, como `A cada 12 horas`, `Manhã e noite` e `Personalizado`. O texto escolhido fica em `treatments.frequency_label`, enquanto as notificações são geradas a partir dos horários finais editáveis salvos em `dose_schedules`.
+
+Ao finalizar ou cancelar um tratamento, o app muda o status do tratamento, remove doses pendentes daquele tratamento e cancela os lembretes locais relacionados. Doses já aplicadas ou puladas permanecem no histórico.
+
+Veterinários ficam em `veterinarians`, isolados por `user_id` com RLS. A remoção usa `deleted_at`, então o profissional sai da lista ativa sem apagar tratamentos antigos. Tratamentos podem guardar `veterinarian_id` e também `veterinarian_name` como nome histórico.
+
+### Peso
+
+Pesos são armazenados em `weight_kg` e exibidos conforme `weight_unit` do pet. A aba de peso mostra card de último peso, gráfico de evolução quando há pelo menos dois registros e lista histórica do mais recente para o mais antigo. Registros de peso podem ser editados; ao salvar, o peso atual do pet é recalculado pelo registro mais recente.
 
 Se você já tem as tabelas antigas criadas e quer aplicar apenas os novos campos de pets, execute o arquivo menor:
 
@@ -209,6 +233,7 @@ O app não salva base64 no banco.
 | `/app/pets/:petId` | Detalhe do pet, tratamentos, vacinas e histórico de peso |
 | `/app/treatments` | Lista de tratamentos |
 | `/app/treatments/new` | Cadastro de tratamento |
+| `/app/veterinarians` | Cadastro de veterinários |
 | `/app/today` | Agenda de doses do dia |
 | `/app/history` | Histórico |
 | `/app/profile` | Perfil e logout |
@@ -406,10 +431,13 @@ android/app/build/outputs/apk/debug/app-debug.apk
 ### Notificações locais
 
 No aplicativo Android, a criação de um tratamento agenda lembretes locais para
-as doses futuras imediatamente, usando o canal Android `treatment-reminders`
-com importância alta. O app solicita a permissão de notificações no primeiro
-acesso após login ou antes do primeiro agendamento e permite consultar ou
-sincronizar os lembretes na tela **Perfil**.
+as doses futuras de cada pet imediatamente, usando o canal Android `treatment-reminders-v2`
+com importância alta, vibração e som curto do app. O canal antigo
+`treatment-reminders` pode continuar visível nas configurações do Android, mas
+os lembretes são recriados no canal novo ao sincronizar pela tela **Perfil**.
+O app solicita a permissão de notificações no primeiro acesso após login ou
+antes do primeiro agendamento e permite consultar ou sincronizar os lembretes na
+tela **Perfil**.
 
 No Android 12 ou superior, também é recomendável permitir **alarmes e
 lembretes exatos** nas configurações do CuidaPet. A versão web apresenta um
@@ -431,8 +459,9 @@ Teste manual recomendado no Android real:
 3. Crie um pet.
 4. Crie um tratamento com dose para daqui 2 minutos.
 5. Feche o app e bloqueie o celular.
-6. Confirme se a notificação aparece no horário.
-7. Reabra o app, sincronize lembretes no Perfil e confira se a contagem não duplicou.
+6. Confirme se a notificação aparece no horário e toca som.
+7. Crie outro tratamento futuro, finalize antes do horário e confirme que o alerta não dispara.
+8. Reabra o app, sincronize lembretes no Perfil e confira se a contagem não duplicou.
 
 As variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` são incorporadas ao bundle durante `npm run build`; confirme que o `.env.local` está configurado antes da sincronização.
 

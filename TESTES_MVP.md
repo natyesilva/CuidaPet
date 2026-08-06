@@ -38,6 +38,10 @@ Use uma das opções abaixo no campo **Status**:
 | Fechar completamente o app e abrir novamente | Usuária continua logada e vai direto para a Home |  |  |
 | Fazer logout pelo Perfil | Sessão é encerrada e app volta para a tela de login |  |  |
 | Tentar entrar com senha errada | App mostra mensagem amigável de erro |  |  |
+| Tocar em "Esqueci minha senha" | App abre a tela para informar o e-mail da conta |  |  |
+| Solicitar recuperação de senha com e-mail válido | App informa que o link será enviado se o e-mail estiver cadastrado |  |  |
+| Abrir o link recebido por e-mail | App abre a tela para criar uma nova senha |  |  |
+| Salvar nova senha e fazer login novamente | Senha é atualizada e usuária consegue entrar com a nova senha |  |  |
 
 ---
 
@@ -73,6 +77,10 @@ Use uma das opções abaixo no campo **Status**:
 | Ver card/lista de pets após cadastrar peso | Último peso aparece no card do pet |  |  |
 | Abrir aba/seção Peso no detalhe do pet | Mostra o último peso registrado e o histórico |  |  |
 | Registrar novo peso com data atual | Novo registro aparece no histórico/timeline |  |  |
+| Editar um peso registrado | Registro é atualizado sem apagar o histórico e o card mantém o peso mais recente correto |  |  |
+| Registrar apenas um peso | App informa que precisa de mais pesos para mostrar o gráfico |  |  |
+| Registrar dois ou mais pesos | Gráfico de evolução aparece usando os registros reais em ordem cronológica |  |  |
+| Conferir card, gráfico e histórico de peso | Todos mostram a mesma unidade e formatação pt-BR |  |  |
 | Registrar peso com observação | Observação é salva junto ao registro |  |  |
 | Tentar registrar peso zero ou negativo | App bloqueia e mostra erro amigável |  |  |
 | Ver Home com controle de peso | Card de controle de peso mostra pets com último peso registrado |  |  |
@@ -94,19 +102,37 @@ Use uma das opções abaixo no campo **Status**:
 
 ---
 
+# 4.1 Veterinários
+
+| Cenário | Resultado esperado | Status | Observações |
+| --- | --- | --- | --- |
+| Acessar aba Vets | Lista de veterinários aparece ou mostra estado vazio claro |  |  |
+| Cadastrar veterinário com nome | Veterinário é salvo e aparece na lista ativa |  |  |
+| Cadastrar veterinário com clínica, telefone ou WhatsApp | Dados opcionais aparecem no card do veterinário |  |  |
+| Editar veterinário cadastrado | Dados são atualizados corretamente |  |  |
+| Remover veterinário da lista ativa | Veterinário deixa de aparecer para seleção em novos tratamentos |  |  |
+| Criar tratamento vinculado a veterinário cadastrado | Tratamento mostra o veterinário na lista e no histórico quando houver dose aplicada/pulada |  |  |
+
+---
+
 # 5. Tratamentos
 
 | Cenário | Resultado esperado | Status | Observações |
 | --- | --- | --- | --- |
 | Acessar aba Tratamentos | Lista de tratamentos aparece ou mostra estado vazio claro |  |  |
 | Criar tratamento vinculado a um pet | Tratamento é salvo e aparece na lista |  |  |
-| Criar tratamento com medicamento, dose, unidade e frequência | App salva as informações conforme preenchidas |  |  |
-| Tentar criar tratamento sem pet | App bloqueia e informa que precisa vincular a um pet |  |  |
+| Criar tratamento selecionando dois ou mais pets | App cria um tratamento para cada pet selecionado |  |  |
+| Criar tratamento com medicamento, dose e frequência pré-cadastrada | App salva as informações conforme preenchidas |  |  |
+| Criar tratamento com frequência "A cada 12 horas" | App sugere horários editáveis e gera doses nos horários finais |  |  |
+| Criar tratamento com frequência "Personalizado" | Usuária consegue adicionar múltiplos horários manualmente |  |  |
+| Usar sugestão rápida de dose | Campo de dose/unidade é preenchido e pode ser editado antes de salvar |  |  |
+| Tentar criar tratamento sem pet selecionado | App bloqueia e informa que precisa selecionar pelo menos um pet |  |  |
 | Tentar criar tratamento sem medicamento | App bloqueia e mostra erro de campo obrigatório |  |  |
 | Tentar criar tratamento com frequência zero ou negativa | App bloqueia e mostra erro amigável |  |  |
 | Tentar criar tratamento com data final menor que inicial | App bloqueia e mostra erro amigável |  |  |
 | Criar tratamento com doses futuras | App gera agenda de doses automaticamente |  |  |
-| Finalizar/cancelar tratamento de teste | Tratamento muda de status e notificações futuras são canceladas |  |  |
+| Finalizar/cancelar tratamento de teste | Tratamento muda de status, doses pendentes saem da agenda e notificações futuras são canceladas |  |  |
+| Finalizar tratamento de um pet criado em lote | Apenas o tratamento daquele pet é finalizado; outros pets continuam com seus próprios tratamentos |  |  |
 | Ler aviso veterinário na tela de tratamento | Texto deixa claro que o CuidaPet não substitui orientação veterinária |  |  |
 
 ---
@@ -117,12 +143,14 @@ Use uma das opções abaixo no campo **Status**:
 | --- | --- | --- | --- |
 | Acessar aba Hoje | Doses do dia aparecem em ordem clara |  |  |
 | Ver dose agendada | Mostra nome do pet, medicamento, dose, horário e status |  |  |
+| Ver dose de tratamento com frequência pré-cadastrada | Agenda reflete os horários finais escolhidos no cadastro |  |  |
 | Marcar dose como aplicada | Status muda para aplicada e horário aplicado é registrado |  |  |
 | Pular dose | Status muda para pulada |  |  |
 | Aplicar ou pular dose e atualizar tela | A dose continua com status correto após atualizar/reabrir app |  |  |
 | Ver agenda sem doses no dia | App mostra estado vazio amigável |  |  |
 | Alternar para calendário geral | App mostra cuidados de todos os pets agrupados por data |  |  |
 | Ver evento no calendário geral | Evento mostra pet, tipo, data/horário e status quando existir |  |  |
+| Finalizar tratamento com doses futuras | Eventos pendentes daquele tratamento somem do calendário geral |  |  |
 | Conferir eventos de vacina no calendário geral | Vacinas futuras e vencidas aparecem com identificação clara |  |  |
 | Conferir pesos no calendário geral | Registros de peso aparecem como eventos históricos |  |  |
 
@@ -134,6 +162,7 @@ Use uma das opções abaixo no campo **Status**:
 | --- | --- | --- | --- |
 | Abrir detalhe de um pet e acessar aba Agenda | Mostra a agenda completa daquele animal |  |  |
 | Ver tratamento com múltiplos horários | Doses aparecem nas datas e horários corretos |  |  |
+| Ver tratamento criado em lote para este pet | Tratamento aparece no histórico/agenda individual do pet correto |  |  |
 | Ver vacina do pet na agenda individual | Vacina aparece na data correta |  |  |
 | Ver peso do pet na agenda individual | Pesagens aparecem como histórico do animal |  |  |
 | Abrir agenda de pet sem eventos | App mostra estado vazio amigável |  |  |
@@ -146,6 +175,8 @@ Use uma das opções abaixo no campo **Status**:
 | --- | --- | --- | --- |
 | Acessar aba Histórico | Mostra doses aplicadas e puladas |  |  |
 | Ver dose aplicada no histórico | Mostra pet, medicamento, dose, horário previsto, horário aplicado e status |  |  |
+| Ver dose de tratamento com veterinário | Histórico mostra o veterinário vinculado quando existir |  |  |
+| Ver dose de tratamento com frequência salva | Histórico mostra a frequência do tratamento quando disponível |  |  |
 | Ver dose pulada no histórico | Mostra pet, medicamento, dose, horário previsto e status pulada |  |  |
 | Conferir ordem da lista | Registros mais recentes aparecem primeiro |  |  |
 | Abrir histórico sem registros | App mostra estado vazio amigável |  |  |
@@ -163,11 +194,13 @@ Use uma das opções abaixo no campo **Status**:
 | Tocar em "Ativar notificações" | Android solicita permissão ou app informa que já está permitido |  |  |
 | Se aparecer aviso de horários exatos | Botão abre as configurações de alarmes/lembretes exatos do CuidaPet |  |  |
 | Criar tratamento com dose para daqui 2 minutos | App agenda notificação futura automaticamente e informa quantos lembretes ficaram pendentes |  |  |
+| Criar tratamento "A cada 12 horas" e editar um horário | Notificações são criadas com base nos horários finais editados |  |  |
+| Criar tratamento futuro selecionando dois pets | App agenda lembretes separados, cada um com o nome do pet correto |  |  |
 | Fechar completamente o app após criar dose futura | Notificação aparece no horário previsto mesmo com app fechado |  |  |
-| Bloquear a tela do celular antes do horário da dose | Notificação aparece na tela bloqueada |  |  |
+| Bloquear a tela do celular antes do horário da dose | Notificação aparece na tela bloqueada e toca som |  |  |
 | Criar tratamento com dois horários futuros | Perfil mostra notificações pendentes para os dois horários após sincronizar |  |  |
 | Editar ou recriar tratamento de teste | Notificações antigas são removidas e novas são agendadas sem duplicar |  |  |
-| Finalizar/cancelar tratamento | Notificações futuras daquele tratamento são canceladas |  |  |
+| Finalizar/cancelar tratamento | Notificações futuras daquele tratamento são canceladas e não reaparecem após sincronizar |  |  |
 | Marcar dose como aplicada antes do horário | Notificação daquela dose é cancelada |  |  |
 | Pular dose antes do horário | Notificação daquela dose é cancelada |  |  |
 | Sincronizar lembretes pelo Perfil | App informa quantidade de notificações pendentes/sincronizadas |  |  |
@@ -177,6 +210,7 @@ Use uma das opções abaixo no campo **Status**:
 Observações importantes para Android:
 
 - Testar com o celular bloqueado e com o app fechado.
+- Confirmar que o canal **Lembretes de tratamento** não está silenciado nas configurações de notificações do Android.
 - Android pode atrasar notificações em modo economia de bateria/Doze, mesmo com `allowWhileIdle`.
 - Para remédios, permitir **Alarmes e lembretes exatos** nas configurações do app aumenta a precisão.
 - O botão de notificação de teste só aparece em ambiente de desenvolvimento; no APK de teste real, validar criando um tratamento para poucos minutos no futuro.
