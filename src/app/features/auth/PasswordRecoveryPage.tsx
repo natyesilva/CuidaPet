@@ -23,6 +23,13 @@ function getFriendlyRecoveryError(message: string) {
     return 'Muitas tentativas seguidas. Aguarde um pouco e tente novamente.'
   }
   if (
+    normalized.includes('redirect') ||
+    normalized.includes('not allowed') ||
+    normalized.includes('invalid url')
+  ) {
+    return 'A URL de recuperação precisa ser liberada nas configurações do Supabase.'
+  }
+  if (
     normalized.includes('session') ||
     normalized.includes('not authenticated') ||
     normalized.includes('unauthorized')
@@ -105,7 +112,7 @@ export function ForgotPasswordPage() {
     try {
       await requestPasswordReset(email)
       setSuccessMessage(
-        'Se o e-mail estiver cadastrado, enviaremos um link para criar uma nova senha.',
+        'Se o e-mail estiver cadastrado, enviaremos um link para criar uma nova senha. Confira também spam e lixo eletrônico.',
       )
     } catch (error) {
       const message = error instanceof Error ? error.message : ''

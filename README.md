@@ -50,7 +50,7 @@ VITE_PASSWORD_RESET_REDIRECT_URL=https://seu-dominio.com/app/reset-password
 
 Use somente a chave pública/publicável (`anon` ou `publishable`) no frontend. Nunca exponha a chave `service_role`.
 
-`VITE_PASSWORD_RESET_REDIRECT_URL` é opcional em desenvolvimento. Se não for definida, o app usa a origem atual com `/app/reset-password`. Em produção, configure essa URL para o domínio onde o link de redefinição de senha deve abrir.
+`VITE_PASSWORD_RESET_REDIRECT_URL` é opcional em desenvolvimento no navegador. Se não for definida, o app usa a origem atual com `/app/reset-password`. No APK Android, configure essa variável com uma URL web publicada, por exemplo `https://seu-dominio.com/app/reset-password`, ou deixe o Supabase usar a **Site URL** configurada no projeto. Não use `localhost` nem `capacitor://localhost` para testes em celular real.
 
 ## Executar localmente
 
@@ -86,7 +86,9 @@ Esse modo mantém dados de exemplo apenas no armazenamento local do aparelho e n
 
 Em **Supabase → Authentication → Providers**, mantenha o provedor de e-mail habilitado. Se a confirmação de e-mail estiver ativa, o usuário precisará confirmar o endereço antes do primeiro login.
 
-Para recuperação de senha, libere a URL final em **Supabase → Authentication → URL Configuration → Redirect URLs**. Para desenvolvimento local, use `http://localhost:5173/app/reset-password`. Para a versão publicada, use o valor configurado em `VITE_PASSWORD_RESET_REDIRECT_URL`.
+Para recuperação de senha, libere a URL final em **Supabase → Authentication → URL Configuration → Redirect URLs**. Para desenvolvimento local no navegador, use `http://localhost:5173/app/reset-password`. Para Android, use uma URL publicada com a mesma rota, por exemplo `https://seu-dominio.com/app/reset-password`, e configure esse mesmo valor em `VITE_PASSWORD_RESET_REDIRECT_URL` antes de gerar o APK.
+
+Nesta versão ainda não há deep link nativo para abrir o app diretamente pelo e-mail de recuperação. O fluxo esperado é: a usuária recebe o e-mail, abre o link no navegador, cria a nova senha e depois volta ao app para fazer login.
 
 Para contas autenticadas pelo Supabase, pets, tratamentos, agenda, histórico, pesos, vacinas e veterinários usam dados reais das tabelas `pets`, `treatments`, `dose_schedules`, `pet_weight_records`, `pet_vaccines` e `veterinarians`. As chamadas estão centralizadas em `src/app/services`, e os componentes consomem a camada `AppDataProvider`.
 

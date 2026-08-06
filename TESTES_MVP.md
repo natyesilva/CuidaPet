@@ -40,8 +40,8 @@ Use uma das opções abaixo no campo **Status**:
 | Tentar entrar com senha errada | App mostra mensagem amigável de erro |  |  |
 | Tocar em "Esqueci minha senha" | App abre a tela para informar o e-mail da conta |  |  |
 | Solicitar recuperação de senha com e-mail válido | App informa que o link será enviado se o e-mail estiver cadastrado |  |  |
-| Abrir o link recebido por e-mail | App abre a tela para criar uma nova senha |  |  |
-| Salvar nova senha e fazer login novamente | Senha é atualizada e usuária consegue entrar com a nova senha |  |  |
+| Abrir o link recebido por e-mail | Navegador abre a tela para criar uma nova senha |  |  |
+| Salvar nova senha e fazer login novamente no app | Senha é atualizada e usuária consegue entrar com a nova senha |  |  |
 
 ---
 

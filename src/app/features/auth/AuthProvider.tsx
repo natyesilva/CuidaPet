@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import type { Session } from '@supabase/supabase-js'
 import {
   type PropsWithChildren,
@@ -27,6 +28,7 @@ function getPasswordResetRedirectUrl() {
   }
 
   if (typeof window === 'undefined') return undefined
+  if (Capacitor.isNativePlatform()) return undefined
 
   return `${window.location.origin}/app/reset-password`
 }
@@ -134,11 +136,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         localStorage.removeItem(demoStorageKey)
         setIsDemoMode(false)
 
+        const redirectTo = getPasswordResetRedirectUrl()
         const { error } = await supabase.auth.resetPasswordForEmail(
           email.trim().toLowerCase(),
-          {
-            redirectTo: getPasswordResetRedirectUrl(),
-          },
+          redirectTo ? { redirectTo } : undefined,
         )
 
         if (error) throw error
