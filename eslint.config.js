@@ -8,6 +8,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist',
+      'coverage/**',
       'android/**/build/**',
       'android/.gradle/**',
       'android/app/src/main/assets/public/**',

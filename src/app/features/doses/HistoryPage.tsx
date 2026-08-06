@@ -1,6 +1,7 @@
 import { CheckCircle2, Clock3, XCircle } from 'lucide-react'
 import { useAppData } from '../../shared/app-data-context'
 import { formatDateTime } from '../../shared/date'
+import { formatDose, formatTreatmentFrequency } from '../../shared/treatment'
 import {
   DataError,
   DataLoading,
@@ -9,7 +10,15 @@ import {
 } from '../../shared/ui'
 
 export function HistoryPage() {
-  const { history, getPet, isLoading, loadError, refreshData } = useAppData()
+  const {
+    history,
+    getPet,
+    getTreatment,
+    getVeterinarian,
+    isLoading,
+    loadError,
+    refreshData,
+  } = useAppData()
 
   return (
     <div className="space-y-6">
@@ -50,6 +59,10 @@ export function HistoryPage() {
             <div className="app-card divide-y divide-slate-100 overflow-hidden">
               {history.map((item) => {
                 const isApplied = item.status === 'applied'
+                const treatment = getTreatment(item.treatmentId)
+                const veterinarian = getVeterinarian(
+                  treatment?.veterinarianId ?? null,
+                )
 
                 return (
                   <article key={item.id} className="flex items-start gap-4 p-4">
@@ -65,8 +78,18 @@ export function HistoryPage() {
                         {item.medicationName}
                       </h2>
                       <p className="mt-1 truncate text-xs font-medium text-slate-500">
-                        {getPet(item.petId)?.name ?? 'Pet'} · {item.dose} {item.doseUnit}
+                        {getPet(item.petId)?.name ?? 'Pet'} · {formatDose(item.dose, item.doseUnit)}
                       </p>
+                      {treatment && (
+                        <p className="mt-1 truncate text-xs font-medium text-slate-500">
+                          {formatTreatmentFrequency(treatment)}
+                        </p>
+                      )}
+                      {(veterinarian || treatment?.veterinarianName) && (
+                        <p className="mt-1 truncate text-xs font-medium text-slate-500">
+                          Vet: {veterinarian?.name ?? treatment?.veterinarianName}
+                        </p>
+                      )}
                       <dl className="mt-3 grid gap-1 text-[11px] text-slate-500">
                         <div className="flex gap-1">
                           <dt className="font-bold">Prevista:</dt>

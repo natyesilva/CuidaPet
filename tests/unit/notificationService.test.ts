@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { notificationIdFromDoseScheduleId } from '../../src/app/features/notifications/notificationService'
+import {
+  notificationIdFromDoseNotification,
+  notificationIdFromDoseScheduleId,
+} from '../../src/app/features/notifications/notificationService'
 
 describe('notificationService', () => {
   it('gera id numérico estável para uma dose', () => {
@@ -30,5 +33,37 @@ describe('notificationService', () => {
 
     expect(first).not.toBe(second)
   })
-})
 
+  it('gera id estável considerando tratamento, pet, dose e horário', () => {
+    const input = {
+      doseScheduleId: '0f4b2cc8-36a1-4ee5-8d67-85d4b3e663b8',
+      treatmentId: '34a6427d-e84c-4769-8a4a-4063cb4c9fcb',
+      petId: 'c483a3dd-9017-4871-a93d-6281edfb98aa',
+      scheduledAt: '2026-06-24T10:30:00.000Z',
+    }
+
+    expect(notificationIdFromDoseNotification(input)).toBe(
+      notificationIdFromDoseNotification(input),
+    )
+  })
+
+  it('evita colisão simples quando o mesmo tratamento tem mais de uma dose', () => {
+    const base = {
+      doseScheduleId: '0f4b2cc8-36a1-4ee5-8d67-85d4b3e663b8',
+      treatmentId: '34a6427d-e84c-4769-8a4a-4063cb4c9fcb',
+      petId: 'c483a3dd-9017-4871-a93d-6281edfb98aa',
+    }
+
+    const first = notificationIdFromDoseNotification({
+      ...base,
+      scheduledAt: '2026-06-24T10:30:00.000Z',
+    })
+    const second = notificationIdFromDoseNotification({
+      ...base,
+      doseScheduleId: '41fd27bf-18ec-4a67-ae00-531cf8de3848',
+      scheduledAt: '2026-06-24T22:30:00.000Z',
+    })
+
+    expect(first).not.toBe(second)
+  })
+})

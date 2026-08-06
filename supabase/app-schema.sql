@@ -12,6 +12,11 @@ create table if not exists public.pets (
   sex text,
   weight_kg numeric,
   weight_unit text,
+  photo_url text,
+  approximate_age integer check (approximate_age is null or approximate_age > 0),
+  approximate_age_unit text check (
+    approximate_age_unit is null or approximate_age_unit in ('months', 'years')
+  ),
   birth_date date,
   notes text,
   created_at timestamptz not null default now(),
@@ -33,6 +38,44 @@ alter table public.pets
 alter table public.pets
   add column if not exists weight_unit text;
 
+alter table public.pets
+  add column if not exists photo_url text;
+
+alter table public.pets
+  add column if not exists approximate_age integer;
+
+alter table public.pets
+  add column if not exists approximate_age_unit text;
+
+alter table public.pets
+  drop constraint if exists pets_approximate_age_check;
+
+alter table public.pets
+  add constraint pets_approximate_age_check
+  check (approximate_age is null or approximate_age > 0);
+
+alter table public.pets
+  drop constraint if exists pets_approximate_age_unit_check;
+
+alter table public.pets
+  add constraint pets_approximate_age_unit_check
+  check (approximate_age_unit is null or approximate_age_unit in ('months', 'years'));
+
+create table if not exists public.veterinarians (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null,
+  clinic_name text,
+  phone text,
+  whatsapp text,
+  email text,
+  specialty text,
+  notes text,
+  deleted_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.treatments (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -41,15 +84,23 @@ create table if not exists public.treatments (
   dose text not null,
   dose_unit text not null,
   frequency_hours integer not null check (frequency_hours > 0),
+  frequency_label text,
   start_at timestamptz not null,
   end_at timestamptz not null,
   instructions text,
+  veterinarian_id uuid references public.veterinarians(id) on delete set null,
   veterinarian_name text,
   status text not null default 'active',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint treatments_date_range_check check (end_at > start_at)
 );
+
+alter table public.treatments
+  add column if not exists veterinarian_id uuid references public.veterinarians(id) on delete set null;
+
+alter table public.treatments
+  add column if not exists frequency_label text;
 
 create table if not exists public.dose_schedules (
   id uuid primary key default gen_random_uuid(),
@@ -88,14 +139,27 @@ create table if not exists public.pet_vaccines (
   updated_at timestamptz not null default now()
 );
 
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('pet-photos', 'pet-photos', true, 10485760)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit;
+
 create index if not exists pets_user_id_idx
   on public.pets(user_id);
+
+create index if not exists veterinarians_user_active_idx
+  on public.veterinarians(user_id, deleted_at);
 
 create index if not exists treatments_user_id_idx
   on public.treatments(user_id);
 
 create index if not exists treatments_pet_id_idx
   on public.treatments(pet_id);
+
+create index if not exists treatments_veterinarian_id_idx
+  on public.treatments(veterinarian_id);
 
 create index if not exists dose_schedules_user_scheduled_idx
   on public.dose_schedules(user_id, scheduled_at);
@@ -126,6 +190,11 @@ create trigger pets_set_updated_at
 before update on public.pets
 for each row execute function public.set_updated_at();
 
+drop trigger if exists veterinarians_set_updated_at on public.veterinarians;
+create trigger veterinarians_set_updated_at
+before update on public.veterinarians
+for each row execute function public.set_updated_at();
+
 drop trigger if exists treatments_set_updated_at on public.treatments;
 create trigger treatments_set_updated_at
 before update on public.treatments
@@ -137,6 +206,7 @@ before update on public.pet_vaccines
 for each row execute function public.set_updated_at();
 
 alter table public.pets enable row level security;
+alter table public.veterinarians enable row level security;
 alter table public.treatments enable row level security;
 alter table public.dose_schedules enable row level security;
 alter table public.pet_weight_records enable row level security;
@@ -167,6 +237,31 @@ on public.pets for delete
 to authenticated
 using (auth.uid() = user_id);
 
+drop policy if exists "Users can select own veterinarians" on public.veterinarians;
+create policy "Users can select own veterinarians"
+on public.veterinarians for select
+to authenticated
+using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own veterinarians" on public.veterinarians;
+create policy "Users can insert own veterinarians"
+on public.veterinarians for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update own veterinarians" on public.veterinarians;
+create policy "Users can update own veterinarians"
+on public.veterinarians for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own veterinarians" on public.veterinarians;
+create policy "Users can delete own veterinarians"
+on public.veterinarians for delete
+to authenticated
+using (auth.uid() = user_id);
+
 drop policy if exists "Users can select own treatments" on public.treatments;
 create policy "Users can select own treatments"
 on public.treatments for select
@@ -177,14 +272,36 @@ drop policy if exists "Users can insert own treatments" on public.treatments;
 create policy "Users can insert own treatments"
 on public.treatments for insert
 to authenticated
-with check (auth.uid() = user_id);
+with check (
+  auth.uid() = user_id
+  and (
+    veterinarian_id is null
+    or exists (
+      select 1
+      from public.veterinarians
+      where veterinarians.id = treatments.veterinarian_id
+        and veterinarians.user_id = auth.uid()
+    )
+  )
+);
 
 drop policy if exists "Users can update own treatments" on public.treatments;
 create policy "Users can update own treatments"
 on public.treatments for update
 to authenticated
 using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+with check (
+  auth.uid() = user_id
+  and (
+    veterinarian_id is null
+    or exists (
+      select 1
+      from public.veterinarians
+      where veterinarians.id = treatments.veterinarian_id
+        and veterinarians.user_id = auth.uid()
+    )
+  )
+);
 
 drop policy if exists "Users can delete own treatments" on public.treatments;
 create policy "Users can delete own treatments"
@@ -266,5 +383,42 @@ create policy "Users can delete own pet vaccines"
 on public.pet_vaccines for delete
 to authenticated
 using (auth.uid() = user_id);
+
+drop policy if exists "Users can read pet photos" on storage.objects;
+create policy "Users can read pet photos"
+on storage.objects for select
+to public
+using (bucket_id = 'pet-photos');
+
+drop policy if exists "Users can upload pet photos" on storage.objects;
+create policy "Users can upload pet photos"
+on storage.objects for insert
+to authenticated
+with check (
+  bucket_id = 'pet-photos'
+  and auth.uid()::text = (storage.foldername(name))[1]
+);
+
+drop policy if exists "Users can update own pet photos" on storage.objects;
+create policy "Users can update own pet photos"
+on storage.objects for update
+to authenticated
+using (
+  bucket_id = 'pet-photos'
+  and auth.uid()::text = (storage.foldername(name))[1]
+)
+with check (
+  bucket_id = 'pet-photos'
+  and auth.uid()::text = (storage.foldername(name))[1]
+);
+
+drop policy if exists "Users can delete own pet photos" on storage.objects;
+create policy "Users can delete own pet photos"
+on storage.objects for delete
+to authenticated
+using (
+  bucket_id = 'pet-photos'
+  and auth.uid()::text = (storage.foldername(name))[1]
+);
 
 notify pgrst, 'reload schema';

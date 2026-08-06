@@ -60,6 +60,41 @@ export const dosesService = {
     return data
   },
 
+  async removePendingForTreatment(
+    userId: string,
+    treatmentId: string,
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('dose_schedules')
+      .delete()
+      .eq('user_id', userId)
+      .eq('treatment_id', treatmentId)
+      .eq('status', 'pending')
+
+    if (error) throw error
+  },
+
+  async listAgenda(userId: string): Promise<DoseRow[]> {
+    const start = new Date()
+    start.setDate(start.getDate() - 30)
+    start.setHours(0, 0, 0, 0)
+
+    const end = new Date()
+    end.setDate(end.getDate() + 60)
+    end.setHours(23, 59, 59, 999)
+
+    const { data, error } = await supabase
+      .from('dose_schedules')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('scheduled_at', start.toISOString())
+      .lte('scheduled_at', end.toISOString())
+      .order('scheduled_at', { ascending: true })
+
+    if (error) throw error
+    return data
+  },
+
   async updateStatus(
     userId: string,
     doseId: string,

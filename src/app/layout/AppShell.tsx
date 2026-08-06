@@ -1,4 +1,12 @@
-import { Bell, CalendarCheck2, Clock3, HeartPulse, PawPrint, UserRound } from 'lucide-react'
+import {
+  Bell,
+  CalendarCheck2,
+  Clock3,
+  HeartPulse,
+  PawPrint,
+  Stethoscope,
+  UserRound,
+} from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { AppDataProvider } from '../shared/AppDataProvider'
 import { AppLogo } from '../shared/AppLogo'
@@ -7,6 +15,7 @@ const navigation = [
   { label: 'Hoje', to: '/app/today', icon: CalendarCheck2 },
   { label: 'Pets', to: '/app/pets', icon: PawPrint },
   { label: 'Tratamentos', to: '/app/treatments', icon: HeartPulse },
+  { label: 'Vets', to: '/app/veterinarians', icon: Stethoscope },
   { label: 'Histórico', to: '/app/history', icon: Clock3 },
   { label: 'Perfil', to: '/app/profile', icon: UserRound },
 ]
@@ -17,6 +26,7 @@ const routeTitles: Record<string, string> = {
   '/app/pets/new': 'Novo pet',
   '/app/treatments': 'Tratamentos',
   '/app/treatments/new': 'Novo tratamento',
+  '/app/veterinarians': 'Veterinários',
   '/app/today': 'Cuidados de hoje',
   '/app/history': 'Histórico',
   '/app/profile': 'Meu perfil',
@@ -54,7 +64,7 @@ function BottomNavigation() {
       className="app-safe-bottom fixed inset-x-0 bottom-0 z-40 mx-auto max-w-[520px] border-t border-slate-100 bg-white/95 px-2 pt-2 shadow-[0_-12px_35px_-28px_rgba(15,23,42,0.7)] backdrop-blur-xl"
       aria-label="Navegação do aplicativo"
     >
-      <div className="grid grid-cols-5">
+      <div className="grid grid-cols-6">
         {navigation.map(({ label, to, icon: Icon }) => (
           <NavLink
             key={to}

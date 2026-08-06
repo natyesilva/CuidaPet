@@ -8,6 +8,7 @@ import { HomePage } from '../features/home/HomePage'
 import { LoginPage, RegisterPage } from '../features/auth/AuthPage'
 import { AuthProvider } from '../features/auth/AuthProvider'
 import { useAuth } from '../features/auth/auth-context'
+import { ForgotPasswordPage, ResetPasswordPage } from '../features/auth/PasswordRecoveryPage'
 import { NewPetPage } from '../features/pets/NewPetPage'
 import { PetDetailPage } from '../features/pets/PetDetailPage'
 import { PetsPage } from '../features/pets/PetsPage'
@@ -15,6 +16,7 @@ import { ProfilePage } from '../features/profile/ProfilePage'
 import { AppSplashScreen } from '../features/splash/AppSplashScreen'
 import { NewTreatmentPage } from '../features/treatments/NewTreatmentPage'
 import { TreatmentsPage } from '../features/treatments/TreatmentsPage'
+import { VeterinariansPage } from '../features/veterinarians/VeterinariansPage'
 import { AppShell } from '../layout/AppShell'
 import { FullScreenLoader } from '../shared/ui'
 
@@ -80,7 +82,10 @@ export function AppRouter() {
             <Route element={<PublicOnlyRoute />}>
               <Route path="/app/login" element={<LoginPage />} />
               <Route path="/app/register" element={<RegisterPage />} />
+              <Route path="/app/forgot-password" element={<ForgotPasswordPage />} />
             </Route>
+
+            <Route path="/app/reset-password" element={<ResetPasswordPage />} />
 
             <Route path="/app" element={<ProtectedRoute />}>
               <Route element={<AppShell />}>
@@ -91,6 +96,7 @@ export function AppRouter() {
                 <Route path="pets/:petId" element={<PetDetailPage />} />
                 <Route path="treatments" element={<TreatmentsPage />} />
                 <Route path="treatments/new" element={<NewTreatmentPage />} />
+                <Route path="veterinarians" element={<VeterinariansPage />} />
                 <Route path="today" element={<TodayPage />} />
                 <Route path="history" element={<HistoryPage />} />
                 <Route path="profile" element={<ProfilePage />} />

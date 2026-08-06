@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowLeft,
+  CalendarDays,
   Check,
   Edit3,
   HeartPulse,
@@ -15,10 +16,15 @@ import {
 import { type FormEvent, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import type { CreatePetInput } from '../../services/petsService'
-import type { Vaccine } from '../../shared/app-data-context'
+import type { Vaccine, WeightRecord } from '../../shared/app-data-context'
 import { useAppData } from '../../shared/app-data-context'
+import { CareEventList } from '../../shared/CareEventList'
+import { buildCareEvents } from '../../shared/careEvents'
 import { formatDaysAgo, formatShortDate } from '../../shared/date'
 import { getFriendlyDataError } from '../../shared/errors'
+import { formatApproximateAge } from '../../shared/pet'
+import { PetAvatar } from '../../shared/PetAvatar'
+import { formatDose, formatTreatmentFrequency } from '../../shared/treatment'
 import {
   DataError,
   DataLoading,
@@ -27,13 +33,20 @@ import {
   Field,
   PageIntro,
 } from '../../shared/ui'
-import { formatWeight, parseWeightInput } from '../../shared/weight'
+import {
+  formatWeight,
+  formatWeightKg,
+  parseWeightInput,
+  weightFromKg,
+  weightToKg,
+} from '../../shared/weight'
 import { PetForm } from './PetForm'
 
-type DetailTab = 'general' | 'treatments' | 'vaccines' | 'weight'
+type DetailTab = 'general' | 'calendar' | 'treatments' | 'vaccines' | 'weight'
 
 const tabs: Array<{ id: DetailTab; label: string }> = [
   { id: 'general', label: 'Dados gerais' },
+  { id: 'calendar', label: 'Agenda' },
   { id: 'treatments', label: 'Tratamentos' },
   { id: 'vaccines', label: 'Vacinas' },
   { id: 'weight', label: 'Peso' },
@@ -160,12 +173,155 @@ function VaccineForm({
   )
 }
 
+function WeightEvolutionChart({
+  records,
+  weightUnit,
+}: {
+  records: WeightRecord[]
+  weightUnit: string | null
+}) {
+  if (records.length < 2) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 p-4 text-sm font-semibold text-slate-500">
+        Registre mais pesos para acompanhar a evolução em gráfico.
+      </div>
+    )
+  }
+
+  const chartRecords = [...records].sort((a, b) =>
+    a.recordedAt.localeCompare(b.recordedAt),
+  )
+  const weights = chartRecords.map((record) => record.weightKg)
+  const minWeight = Math.min(...weights)
+  const maxWeight = Math.max(...weights)
+  const range = maxWeight - minWeight || Math.max(maxWeight * 0.1, 0.1)
+  const lowerWeight = minWeight - range * 0.12
+  const upperWeight = maxWeight + range * 0.12
+  const width = 340
+  const height = 210
+  const padding = { top: 18, right: 16, bottom: 38, left: 58 }
+  const plotWidth = width - padding.left - padding.right
+  const plotHeight = height - padding.top - padding.bottom
+  const pointX = (index: number) =>
+    padding.left + (plotWidth * index) / (chartRecords.length - 1)
+  const pointY = (weightKg: number) =>
+    padding.top +
+    ((upperWeight - weightKg) / (upperWeight - lowerWeight)) * plotHeight
+  const points = chartRecords.map((record, index) => ({
+    record,
+    x: pointX(index),
+    y: pointY(record.weightKg),
+  }))
+  const linePath = points
+    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+    .join(' ')
+  const baseline = padding.top + plotHeight
+  const areaPath = `${linePath} L ${points[points.length - 1].x} ${baseline} L ${points[0].x} ${baseline} Z`
+  const yTicks = [upperWeight, (upperWeight + lowerWeight) / 2, lowerWeight]
+  const firstRecord = chartRecords[0]
+  const lastRecord = chartRecords[chartRecords.length - 1]
+
+  return (
+    <div className="rounded-2xl border border-brand-100 bg-white p-3">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-56 w-full overflow-visible"
+        role="img"
+        aria-label="Gráfico de evolução do peso do pet"
+      >
+        <defs>
+          <linearGradient id="weight-chart-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#22C7B8" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#22C7B8" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {yTicks.map((tick) => {
+          const y = pointY(tick)
+
+          return (
+            <g key={tick}>
+              <line
+                x1={padding.left}
+                x2={width - padding.right}
+                y1={y}
+                y2={y}
+                stroke="#E2E8F0"
+                strokeDasharray="4 6"
+              />
+              <text
+                x={padding.left - 8}
+                y={y + 4}
+                textAnchor="end"
+                className="fill-slate-400 text-[10px] font-bold"
+              >
+                {formatWeight(tick, weightUnit)}
+              </text>
+            </g>
+          )
+        })}
+        <path d={areaPath} fill="url(#weight-chart-fill)" />
+        <path
+          d={linePath}
+          fill="none"
+          stroke="#0F766E"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="3"
+        />
+        {points.map((point) => (
+          <g key={point.record.id}>
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r="5"
+              fill="#0F766E"
+              stroke="#FFFFFF"
+              strokeWidth="2"
+            >
+              <title>
+                {formatShortDate(point.record.recordedAt)}: {formatWeight(point.record.weightKg, weightUnit)}
+              </title>
+            </circle>
+          </g>
+        ))}
+        <text
+          x={padding.left}
+          y={height - 12}
+          textAnchor="start"
+          className="fill-slate-400 text-[10px] font-bold"
+        >
+          {formatShortDate(firstRecord.recordedAt)}
+        </text>
+        <text
+          x={width - padding.right}
+          y={height - 12}
+          textAnchor="end"
+          className="fill-slate-400 text-[10px] font-bold"
+        >
+          {formatShortDate(lastRecord.recordedAt)}
+        </text>
+      </svg>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1 text-xs font-semibold text-slate-500">
+        <span>
+          {formatShortDate(firstRecord.recordedAt)} até{' '}
+          {formatShortDate(lastRecord.recordedAt)}
+        </span>
+        <strong className="text-brand-700">
+          Último: {formatWeight(lastRecord.weightKg, weightUnit)}
+        </strong>
+      </div>
+    </div>
+  )
+}
+
 export function PetDetailPage() {
   const { petId = '' } = useParams()
   const {
     getPet,
+    getVeterinarian,
     getPetWeights,
     getPetVaccines,
+    agendaDoses,
     treatments,
     isLoading,
     loadError,
@@ -174,6 +330,7 @@ export function PetDetailPage() {
     refreshData,
     updatePet,
     addWeight,
+    updateWeight,
     addVaccine,
     updateVaccine,
     deleteVaccine,
@@ -183,6 +340,7 @@ export function PetDetailPage() {
   const [showWeightForm, setShowWeightForm] = useState(false)
   const [showVaccineForm, setShowVaccineForm] = useState(false)
   const [editingVaccine, setEditingVaccine] = useState<Vaccine | null>(null)
+  const [editingWeight, setEditingWeight] = useState<WeightRecord | null>(null)
   const [weight, setWeight] = useState('')
   const [weightDate, setWeightDate] = useState(localDate())
   const [weightNotes, setWeightNotes] = useState('')
@@ -193,6 +351,13 @@ export function PetDetailPage() {
   const weights = getPetWeights(petId)
   const vaccines = getPetVaccines(petId)
   const petTreatments = treatments.filter((treatment) => treatment.petId === petId)
+  const petAgendaEvents = buildCareEvents({
+    doses: agendaDoses,
+    vaccines,
+    weightRecords: weights,
+    pets: pet ? [pet] : [],
+    petId,
+  })
   const today = localDate()
   const petClassification = pet
     ? [
@@ -201,6 +366,34 @@ export function PetDetailPage() {
         pet.subspeciesOrMorph,
       ].filter(Boolean)
     : []
+  const approximateAge = pet
+    ? formatApproximateAge(pet.approximateAge, pet.approximateAgeUnit)
+    : ''
+  const weightUnit = pet?.weightUnit === 'g' ? 'g' : 'kg'
+
+  function resetWeightForm() {
+    setEditingWeight(null)
+    setWeight('')
+    setWeightDate(localDate())
+    setWeightNotes('')
+    setShowWeightForm(false)
+  }
+
+  function openNewWeightForm() {
+    setEditingWeight(null)
+    setWeight('')
+    setWeightDate(localDate())
+    setWeightNotes('')
+    setShowWeightForm(true)
+  }
+
+  function openEditWeightForm(record: WeightRecord) {
+    setEditingWeight(record)
+    setWeight(formatWeightKg(weightFromKg(record.weightKg, weightUnit)))
+    setWeightDate(record.recordedAt)
+    setWeightNotes(record.notes ?? '')
+    setShowWeightForm(true)
+  }
 
   async function handlePetSubmit(input: CreatePetInput) {
     setIsSaving(true)
@@ -226,14 +419,18 @@ export function PetDetailPage() {
     setIsSaving(true)
     setActionError('')
     try {
-      await addWeight(petId, {
-        weightKg: value,
+      const input = {
+        weightKg: weightToKg(value, weightUnit),
         recordedAt: weightDate,
         notes: weightNotes.trim() || null,
-      })
-      setWeight('')
-      setWeightNotes('')
-      setShowWeightForm(false)
+      }
+
+      if (editingWeight) {
+        await updateWeight(editingWeight.id, input)
+      } else {
+        await addWeight(petId, input)
+      }
+      resetWeightForm()
     } catch (error) {
       setActionError(getFriendlyDataError(error))
     } finally {
@@ -311,6 +508,7 @@ export function PetDetailPage() {
             ? petClassification.join(' • ')
             : pet.breed || 'Companheiro cadastrado no CuidaPet'
         }
+        action={<PetAvatar pet={pet} size="xl" />}
       />
 
       {feedback && <FeedbackBanner {...feedback} onDismiss={clearFeedback} />}
@@ -358,6 +556,7 @@ export function PetDetailPage() {
                     'Nascimento',
                     pet.birthDate ? formatShortDate(pet.birthDate) : 'Não informado',
                   ],
+                  ['Idade aproximada', approximateAge || 'Não informada'],
                   [
                     'Último peso',
                     weights[0]
@@ -403,35 +602,63 @@ export function PetDetailPage() {
               title="Nenhum tratamento"
               description="Este pet ainda não possui tratamentos cadastrados."
               action={
-                <Link to="/app/treatments/new" className="font-bold text-brand-700">
+                <Link
+                  to={`/app/treatments/new?petId=${petId}`}
+                  className="font-bold text-brand-700"
+                >
                   Cadastrar tratamento
                 </Link>
               }
             />
           ) : (
-            petTreatments.map((treatment) => (
-              <article key={treatment.id} className="app-card p-5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-extrabold text-slate-900">
-                      {treatment.medicationName}
-                    </h3>
-                    <p className="mt-1 text-sm font-semibold text-brand-700">
-                      {treatment.dose} {treatment.doseUnit} · a cada{' '}
-                      {treatment.frequencyHours}h
-                    </p>
+            petTreatments.map((treatment) => {
+              const veterinarian = getVeterinarian(treatment.veterinarianId)
+
+              return (
+                <article key={treatment.id} className="app-card p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-extrabold text-slate-900">
+                        {treatment.medicationName}
+                      </h3>
+                      <p className="mt-1 text-sm font-semibold text-brand-700">
+                        {formatDose(treatment.dose, treatment.doseUnit)} ·{' '}
+                        {formatTreatmentFrequency(treatment)}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-extrabold uppercase text-brand-700">
+                      {treatment.status}
+                    </span>
                   </div>
-                  <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-extrabold uppercase text-brand-700">
-                    {treatment.status}
-                  </span>
-                </div>
-                <p className="mt-3 text-xs text-slate-500">
-                  {formatShortDate(treatment.startAt)} até{' '}
-                  {formatShortDate(treatment.endAt)}
-                </p>
-              </article>
-            ))
+                  <p className="mt-3 text-xs text-slate-500">
+                    {formatShortDate(treatment.startAt)} até{' '}
+                    {formatShortDate(treatment.endAt)}
+                  </p>
+                  {(veterinarian || treatment.veterinarianName) && (
+                    <p className="mt-2 text-xs font-semibold text-slate-500">
+                      Vet: {veterinarian?.name ?? treatment.veterinarianName}
+                    </p>
+                  )}
+                </article>
+              )
+            })
           )}
+        </div>
+      )}
+
+      {activeTab === 'calendar' && (
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-2xl border border-brand-100 bg-brand-50 p-4 text-brand-900">
+            <CalendarDays className="mt-0.5 size-5 shrink-0" />
+            <p className="text-sm leading-6">
+              Agenda completa de {pet.name}: remédios, vacinas e registros de peso em uma linha do tempo.
+            </p>
+          </div>
+          <CareEventList
+            events={petAgendaEvents}
+            emptyTitle="Agenda vazia"
+            emptyDescription="Cadastre tratamentos, vacinas ou pesos para acompanhar a rotina deste pet."
+          />
         </div>
       )}
 
@@ -561,7 +788,7 @@ export function PetDetailPage() {
           {!showWeightForm ? (
             <button
               type="button"
-              onClick={() => setShowWeightForm(true)}
+              onClick={openNewWeightForm}
               className="focus-ring inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 font-bold text-white"
             >
               <Plus className="size-5" />
@@ -569,9 +796,11 @@ export function PetDetailPage() {
             </button>
           ) : (
             <form className="app-card space-y-4 p-5" onSubmit={handleWeightSubmit}>
-              <h3 className="font-extrabold text-slate-900">Novo peso</h3>
+              <h3 className="font-extrabold text-slate-900">
+                {editingWeight ? 'Editar peso' : 'Novo peso'}
+              </h3>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Peso (kg)">
+                <Field label={`Peso (${weightUnit})`}>
                   <input
                     required
                     type="text"
@@ -579,7 +808,7 @@ export function PetDetailPage() {
                     value={weight}
                     onChange={(event) => setWeight(event.target.value)}
                     className="app-input"
-                    placeholder="Ex.: 12,4"
+                    placeholder={weightUnit === 'g' ? 'Ex.: 93' : 'Ex.: 12,4'}
                   />
                 </Field>
                 <Field label="Data">
@@ -603,7 +832,7 @@ export function PetDetailPage() {
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowWeightForm(false)}
+                  onClick={resetWeightForm}
                   className="focus-ring rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600"
                 >
                   Cancelar
@@ -614,7 +843,7 @@ export function PetDetailPage() {
                   className="focus-ring inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
                 >
                   {isSaving ? <LoaderCircle className="size-4 animate-spin" /> : <Scale className="size-4" />}
-                  Registrar
+                  {editingWeight ? 'Salvar' : 'Registrar'}
                 </button>
               </div>
             </form>
@@ -623,16 +852,22 @@ export function PetDetailPage() {
           {weights.length === 0 ? (
             <EmptyState
               icon={<Scale className="size-6" />}
-              title="Nenhum peso registrado"
-              description="Registre o peso para acompanhar a evolução deste pet."
+              title="Nenhum peso registrado ainda."
+              description="Registre o primeiro peso para acompanhar a evolução deste pet."
             />
           ) : (
             <section className="app-card p-5">
               <div className="mb-5">
                 <h3 className="font-extrabold text-slate-900">Evolução do peso</h3>
                 <p className="mt-1 text-xs text-slate-500">
-                  Histórico preparado para receber um gráfico futuramente.
+                  Acompanhe aqui a evolução do peso do pet.
                 </p>
+              </div>
+              <div className="mb-6">
+                <WeightEvolutionChart
+                  records={weights}
+                  weightUnit={pet.weightUnit}
+                />
               </div>
               <div className="relative">
                 <span
@@ -660,6 +895,14 @@ export function PetDetailPage() {
                             {record.notes}
                           </p>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => openEditWeightForm(record)}
+                          className="focus-ring mt-3 inline-flex items-center gap-1.5 rounded-xl text-xs font-extrabold text-brand-700"
+                        >
+                          <Edit3 className="size-3.5" />
+                          Editar
+                        </button>
                       </div>
                     </article>
                   ))}

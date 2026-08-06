@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom'
 import { useAppData } from '../../shared/app-data-context'
 import { formatShortDate } from '../../shared/date'
 import { getFriendlyDataError } from '../../shared/errors'
-import { getPetEmoji } from '../../shared/pet'
+import { formatApproximateAge } from '../../shared/pet'
+import { PetAvatar } from '../../shared/PetAvatar'
 import {
   DataError,
   DataLoading,
@@ -101,6 +102,10 @@ export function PetsPage() {
               pet.specificSpecies,
               pet.subspeciesOrMorph,
             ].filter(Boolean)
+            const approximateAge = formatApproximateAge(
+              pet.approximateAge,
+              pet.approximateAgeUnit,
+            )
 
             return (
               <article key={pet.id} className="app-card overflow-hidden">
@@ -109,9 +114,7 @@ export function PetsPage() {
                     to={`/app/pets/${pet.id}`}
                     className="focus-ring flex min-w-0 flex-1 items-center gap-4 rounded-2xl"
                   >
-                    <span className="grid size-16 shrink-0 place-items-center rounded-[1.35rem] bg-gradient-to-br from-brand-50 to-cyan-100 text-3xl">
-                      {getPetEmoji(pet.species)}
-                    </span>
+                    <PetAvatar pet={pet} size="lg" />
                     <div className="min-w-0 flex-1">
                       <h2 className="truncate text-lg font-extrabold text-slate-900">
                         {pet.name}
@@ -137,6 +140,11 @@ export function PetsPage() {
                           <HeartPulse className="size-3" />
                           {activeTreatments}
                         </span>
+                        {approximateAge && (
+                          <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-bold text-brand-700">
+                            {approximateAge}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <ChevronRight className="size-5 shrink-0 text-slate-300" />

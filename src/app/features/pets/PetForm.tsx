@@ -1,5 +1,16 @@
-import { Check, LoaderCircle, PawPrint } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera'
+import {
+  CalendarDays,
+  CameraIcon,
+  Check,
+  ImagePlus,
+  LoaderCircle,
+  PawPrint,
+  Scale,
+  Sparkles,
+  X,
+} from 'lucide-react'
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react'
 import {
   animalGroupOptions,
   findKnownOption,
@@ -99,6 +110,18 @@ export function PetForm({
   const [breed, setBreed] = useState(initialPet?.breed ?? '')
   const [sex, setSex] = useState(initialPet?.sex ?? '')
   const [birthDate, setBirthDate] = useState(initialPet?.birthDate ?? '')
+  const [ageInputMode, setAgeInputMode] = useState<'approximate' | 'birthDate'>(
+    initialPet?.birthDate ? 'birthDate' : 'approximate',
+  )
+  const [photoUrl, setPhotoUrl] = useState(initialPet?.photoUrl ?? '')
+  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState(initialPet?.photoUrl ?? '')
+  const [approximateAge, setApproximateAge] = useState(
+    initialPet?.approximateAge ? String(initialPet.approximateAge) : '',
+  )
+  const [approximateAgeUnit, setApproximateAgeUnit] = useState<'months' | 'years'>(
+    initialPet?.approximateAgeUnit ?? 'years',
+  )
   const [weightUnit, setWeightUnit] = useState(
     initialPet?.weightUnit === 'g' ? 'g' : 'kg',
   )
@@ -108,6 +131,7 @@ export function PetForm({
   })
   const [notes, setNotes] = useState(initialPet?.notes ?? '')
   const [errorMessage, setErrorMessage] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const animalGroupValues = getAnimalGroupOptions()
   const knownAnimalGroup = findKnownOption(animalGroup, animalGroupValues)
   const speciesGroups = getSpeciesGroupsForAnimalGroup(animalGroup)
@@ -157,6 +181,74 @@ export function PetForm({
     (!canTypeCustomSpecificSpecies && specificSpeciesGroups.length === 0)
   const isMorphDisabled =
     !species.trim() || (!canTypeCustomMorph && morphGroups.length === 0)
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(photoPreviewUrl)
+      }
+    }
+  }, [photoPreviewUrl])
+
+  function setSelectedPhoto(file: File, previewUrl: string) {
+    if (photoPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreviewUrl)
+    }
+    setPhotoFile(file)
+    setPhotoPreviewUrl(previewUrl)
+  }
+
+  async function handlePhotoButtonClick() {
+    setErrorMessage('')
+
+    try {
+      const image = await Camera.getPhoto({
+        quality: 82,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Prompt,
+        promptLabelHeader: 'Foto do pet',
+        promptLabelPhoto: 'Escolher da galeria',
+        promptLabelPicture: 'Tirar foto',
+      })
+
+      if (!image.webPath) return
+
+      const response = await fetch(image.webPath)
+      const blob = await response.blob()
+      const extension = image.format || 'jpg'
+      const file = new File([blob], `foto-pet.${extension}`, {
+        type: blob.type || `image/${extension}`,
+      })
+      setPhotoUrl(initialPet?.photoUrl ?? '')
+      setSelectedPhoto(file, image.webPath)
+    } catch {
+      fileInputRef.current?.click()
+    }
+  }
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage('Escolha um arquivo de imagem para a foto do pet.')
+      return
+    }
+
+    setPhotoUrl(initialPet?.photoUrl ?? '')
+    setSelectedPhoto(file, URL.createObjectURL(file))
+    event.target.value = ''
+  }
+
+  function handleRemovePhoto() {
+    if (photoPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(photoPreviewUrl)
+    }
+    setPhotoFile(null)
+    setPhotoPreviewUrl('')
+    setPhotoUrl('')
+  }
 
   function handleAnimalGroupChange(nextValue: string) {
     const knownNextGroup = findKnownOption(nextValue, animalGroupValues)
@@ -215,6 +307,15 @@ export function PetForm({
     setSubspeciesOrMorph(nextValue)
   }
 
+  function handleAgeModeChange(nextMode: 'approximate' | 'birthDate') {
+    setAgeInputMode(nextMode)
+    if (nextMode === 'approximate') {
+      setBirthDate('')
+      return
+    }
+    setApproximateAge('')
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setErrorMessage('')
@@ -253,9 +354,35 @@ export function PetForm({
     }
 
     const parsedWeight = parseWeightInput(weight)
-    const weightKg = weight ? weightToKg(parsedWeight, weightUnit) : null
-    if (weight && (!Number.isFinite(parsedWeight) || parsedWeight <= 0)) {
+    if (!weight.trim()) {
+      setErrorMessage('Informe o peso atual do pet.')
+      return
+    }
+    if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
       setErrorMessage('O peso precisa ser maior que zero.')
+      return
+    }
+    const weightKg = weightToKg(parsedWeight, weightUnit)
+
+    const parsedApproximateAge =
+      ageInputMode === 'approximate' && approximateAge ? Number(approximateAge) : null
+    if (
+      ageInputMode === 'approximate' &&
+      !approximateAge.trim()
+    ) {
+      setErrorMessage('Informe a idade aproximada ou escolha preencher a data de nascimento.')
+      return
+    }
+    if (
+      ageInputMode === 'approximate' &&
+      parsedApproximateAge !== null &&
+      (!Number.isInteger(parsedApproximateAge) || parsedApproximateAge <= 0)
+    ) {
+      setErrorMessage('A idade aproximada precisa ser um número inteiro maior que zero.')
+      return
+    }
+    if (ageInputMode === 'birthDate' && !birthDate) {
+      setErrorMessage('Informe a data de nascimento ou escolha preencher a idade aproximada.')
       return
     }
 
@@ -267,9 +394,16 @@ export function PetForm({
       subspeciesOrMorph: subspeciesOrMorph.trim() || null,
       breed: breed.trim() || null,
       sex: sex.trim() || null,
+      photoUrl: photoUrl || null,
+      photoFile,
+      approximateAge: ageInputMode === 'approximate' ? parsedApproximateAge : null,
+      approximateAgeUnit:
+        ageInputMode === 'approximate' && parsedApproximateAge
+          ? approximateAgeUnit
+          : null,
       weightKg,
       weightUnit,
-      birthDate: birthDate || null,
+      birthDate: ageInputMode === 'birthDate' ? birthDate : null,
       notes: notes.trim() || null,
     })
   }
@@ -287,6 +421,56 @@ export function PetForm({
       </div>
 
       {errorMessage && <FeedbackBanner type="error" message={errorMessage} />}
+
+      <section className="rounded-[1.5rem] border border-slate-100 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-4">
+          <span className="grid size-20 shrink-0 place-items-center overflow-hidden rounded-[1.65rem] bg-gradient-to-br from-brand-50 to-cyan-100 text-4xl shadow-sm">
+            {photoPreviewUrl ? (
+              <img
+                src={photoPreviewUrl}
+                alt="Prévia da foto do pet"
+                className="size-full object-cover"
+              />
+            ) : (
+              <span>{species ? '🐾' : '📷'}</span>
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-extrabold text-slate-900">Foto do pet</h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Use uma foto da galeria ou tire uma nova no Android.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void handlePhotoButtonClick()}
+                className="focus-ring inline-flex items-center gap-2 rounded-2xl bg-brand-600 px-3.5 py-2.5 text-xs font-extrabold text-white"
+              >
+                {photoPreviewUrl ? <CameraIcon className="size-4" /> : <ImagePlus className="size-4" />}
+                {photoPreviewUrl ? 'Trocar foto' : 'Adicionar foto'}
+              </button>
+              {photoPreviewUrl && (
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  className="focus-ring inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-3.5 py-2.5 text-xs font-extrabold text-slate-500"
+                >
+                  <X className="size-4" />
+                  Remover
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+      </section>
 
       <Field label="Nome do animal">
         <input
@@ -392,51 +576,138 @@ export function PetForm({
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Sexo" hint="opcional">
-          <SpeciesCombobox
-            value={sex}
-            onChange={setSex}
-            groups={sexOptions}
-            required={false}
-            placeholder="Ex.: Fêmea"
-            hint="Texto livre."
-            buttonLabel="Mostrar sugestões de sexo"
-          />
-        </Field>
-        <Field label="Nascimento" hint="opcional">
-          <input
-            type="date"
-            value={birthDate}
-            onChange={(event) => setBirthDate(event.target.value)}
-            className="app-input"
-          />
-        </Field>
-      </div>
+      <Field label="Sexo" hint="opcional">
+        <SpeciesCombobox
+          value={sex}
+          onChange={setSex}
+          groups={sexOptions}
+          required={false}
+          placeholder="Ex.: Fêmea"
+          hint="Texto livre."
+          buttonLabel="Mostrar sugestões de sexo"
+        />
+      </Field>
 
-      <div className="grid grid-cols-[1fr_auto] gap-3">
-        <Field label="Peso atual" hint="opcional">
-          <input
-            type="text"
-            inputMode="decimal"
-            value={weight}
-            onChange={(event) => setWeight(event.target.value)}
-            className="app-input"
-            placeholder={weightUnit === 'g' ? 'Ex.: 420' : 'Ex.: 12,4'}
-          />
-        </Field>
-        <Field label="Unid.">
-          <select
-            value={weightUnit}
-            onChange={(event) => setWeightUnit(event.target.value)}
-            className="app-input w-24 px-3"
-            aria-label="Unidade do peso"
-          >
-            <option value="kg">kg</option>
-            <option value="g">g</option>
-          </select>
-        </Field>
-      </div>
+      <section className="space-y-4 rounded-[1.75rem] border border-brand-100 bg-gradient-to-br from-white via-brand-50/70 to-cyan-50 p-4 shadow-sm">
+        <div className="flex items-start gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white text-brand-700 shadow-sm">
+            <Scale className="size-5" />
+          </span>
+          <div>
+            <h2 className="text-sm font-extrabold text-slate-900">
+              Saúde e idade
+            </h2>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Informe o peso atual e escolha como prefere registrar a idade do pet.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-[1.35rem] border border-white/80 bg-white/90 p-3">
+          <div className="grid grid-cols-[1fr_auto] gap-3">
+            <Field label="Peso atual" hint="obrigatório">
+              <input
+                required
+                type="text"
+                inputMode="decimal"
+                value={weight}
+                onChange={(event) => setWeight(event.target.value)}
+                className="app-input"
+                placeholder={weightUnit === 'g' ? 'Ex.: 420' : 'Ex.: 12,4'}
+              />
+            </Field>
+            <Field label="Unid.">
+              <select
+                value={weightUnit}
+                onChange={(event) => setWeightUnit(event.target.value)}
+                className="app-input w-24 px-3"
+                aria-label="Unidade do peso"
+              >
+                <option value="kg">kg</option>
+                <option value="g">g</option>
+              </select>
+            </Field>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            Esse peso será usado como referência inicial no histórico do pet.
+          </p>
+        </div>
+
+        <div>
+          <p className="mb-2 text-sm font-bold text-slate-700">
+            Como quer informar a idade?
+          </p>
+          <div className="grid grid-cols-2 gap-2 rounded-[1.35rem] bg-white/70 p-1.5">
+            <button
+              type="button"
+              onClick={() => handleAgeModeChange('approximate')}
+              aria-pressed={ageInputMode === 'approximate'}
+              className={`focus-ring flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-extrabold transition ${
+                ageInputMode === 'approximate'
+                  ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20'
+                  : 'bg-white text-slate-500'
+              }`}
+            >
+              <Sparkles className="size-4" />
+              Idade aproximada
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAgeModeChange('birthDate')}
+              aria-pressed={ageInputMode === 'birthDate'}
+              className={`focus-ring flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-extrabold transition ${
+                ageInputMode === 'birthDate'
+                  ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/20'
+                  : 'bg-white text-slate-500'
+              }`}
+            >
+              <CalendarDays className="size-4" />
+              Nascimento
+            </button>
+          </div>
+        </div>
+
+        {ageInputMode === 'approximate' ? (
+          <div className="grid grid-cols-[1fr_auto] gap-3">
+            <Field label="Idade aproximada" hint="obrigatório">
+              <input
+                required
+                type="number"
+                min={1}
+                step={1}
+                inputMode="numeric"
+                value={approximateAge}
+                onChange={(event) => setApproximateAge(event.target.value)}
+                className="app-input"
+                placeholder="Ex.: 2"
+              />
+            </Field>
+            <Field label="Unid.">
+              <select
+                value={approximateAgeUnit}
+                onChange={(event) =>
+                  setApproximateAgeUnit(event.target.value === 'months' ? 'months' : 'years')
+                }
+                className="app-input w-28 px-3"
+                aria-label="Unidade da idade aproximada"
+              >
+                <option value="months">meses</option>
+                <option value="years">anos</option>
+              </select>
+            </Field>
+          </div>
+        ) : (
+          <Field label="Data de nascimento" hint="obrigatório">
+            <input
+              required
+              type="date"
+              value={birthDate}
+              onChange={(event) => setBirthDate(event.target.value)}
+              className="app-input"
+            />
+          </Field>
+        )}
+      </section>
 
       <Field label="Observações" hint="opcional">
         <textarea

@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom'
 import { useAppData } from '../../shared/app-data-context'
 import { formatShortDate, formatTime } from '../../shared/date'
 import { getFriendlyDataError } from '../../shared/errors'
+import { formatDose, formatTreatmentFrequency } from '../../shared/treatment'
 import {
   DataError,
   DataLoading,
@@ -32,6 +33,7 @@ export function TreatmentsPage() {
   const {
     treatments,
     getPet,
+    getVeterinarian,
     isLoading,
     loadError,
     feedback,
@@ -119,6 +121,7 @@ export function TreatmentsPage() {
         <div className="space-y-3">
           {treatments.map((treatment) => {
             const pet = getPet(treatment.petId)
+            const veterinarian = getVeterinarian(treatment.veterinarianId)
 
             return (
               <article key={treatment.id} className="app-card overflow-hidden">
@@ -133,7 +136,7 @@ export function TreatmentsPage() {
                           {treatment.medicationName}
                         </h2>
                         <p className="mt-1 text-sm font-semibold text-brand-700">
-                          {pet?.name ?? 'Pet'} · {treatment.dose} {treatment.doseUnit}
+                          {pet?.name ?? 'Pet'} · {formatDose(treatment.dose, treatment.doseUnit)}
                         </p>
                       </div>
                       <span
@@ -149,7 +152,7 @@ export function TreatmentsPage() {
                     <div className="mt-4 grid gap-2 text-xs font-medium text-slate-500">
                       <p className="flex items-center gap-2">
                         <Clock3 className="size-4 text-slate-400" />
-                        A cada {treatment.frequencyHours} horas · início às{' '}
+                        {formatTreatmentFrequency(treatment)} · início às{' '}
                         {formatTime(treatment.startAt)}
                       </p>
                       <p className="flex items-center gap-2">
@@ -157,10 +160,10 @@ export function TreatmentsPage() {
                         {formatShortDate(treatment.startAt)} até{' '}
                         {formatShortDate(treatment.endAt)}
                       </p>
-                      {treatment.veterinarianName && (
+                      {(veterinarian || treatment.veterinarianName) && (
                         <p className="flex items-center gap-2">
                           <Stethoscope className="size-4 text-slate-400" />
-                          {treatment.veterinarianName}
+                          {veterinarian?.name ?? treatment.veterinarianName}
                         </p>
                       )}
                     </div>

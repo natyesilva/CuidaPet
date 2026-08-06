@@ -17,6 +17,8 @@ export type AuthContextValue = {
   isDemoMode: boolean
   signIn: (identifier: string, password: string) => Promise<void>
   signUp: (data: SignUpData) => Promise<{ needsEmailConfirmation: boolean }>
+  requestPasswordReset: (email: string) => Promise<void>
+  updatePassword: (password: string) => Promise<void>
   signOut: () => Promise<void>
 }
 

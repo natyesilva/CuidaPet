@@ -10,6 +10,18 @@ export function getFriendlyDataError(error: unknown) {
         : ''
   const message = rawMessage.toLowerCase()
 
+  if (message.includes('pet_photo_bucket_missing')) {
+    return 'O bucket de fotos ainda não foi criado no Supabase. Execute o schema atualizado ou crie o bucket pet-photos no Storage.'
+  }
+  if (message.includes('pet_photo_storage_permission_denied')) {
+    return 'O bucket de fotos está sem permissão para envio. Verifique as policies do Supabase Storage para o bucket pet-photos.'
+  }
+  if (message.includes('pet_photo_file_too_large')) {
+    return 'A foto está muito grande para envio. Tente escolher uma imagem menor.'
+  }
+  if (message.includes('pet_photo_upload_failed')) {
+    return 'Não foi possível enviar a foto do pet. Verifique o Supabase Storage e tente novamente.'
+  }
   if (
     (message.includes('relation') && message.includes('does not exist')) ||
     message.includes('schema cache') ||

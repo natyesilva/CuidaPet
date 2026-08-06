@@ -3,14 +3,18 @@ import {
   type PendingLocalNotificationSchema,
 } from '@capacitor/local-notifications'
 import { Capacitor, type PermissionState } from '@capacitor/core'
+import { formatDose } from '../../shared/treatment'
 
 const notificationSource = 'cuidapet-dose-reminder'
 const notificationTestSource = 'cuidapet-test-notification'
-const notificationChannelId = 'cuidapet-medication-reminders'
+const notificationChannelVersion = 2
+const notificationChannelId = 'treatment-reminders-v2'
+const notificationSoundFile = 'cuidapet_reminder.wav'
 const notificationIcon = 'ic_stat_cuidapet'
 const notificationIconColor = '#22C7B8'
 const testNotificationId = 762307
 const minimumScheduleDelayMs = 1_000
+const scheduleChunkSize = 100
 
 export type DoseNotificationInput = {
   doseScheduleId: string
@@ -32,6 +36,7 @@ export type NotificationStatus = {
 export type NotificationScheduleResult = {
   supported: boolean
   permission: NotificationStatus['permission']
+  exactAlarm: NotificationStatus['exactAlarm']
   scheduled: number
   alreadyScheduled: number
   cancelled: number
@@ -40,13 +45,35 @@ export type NotificationScheduleResult = {
 
 type NotificationExtra = {
   source?: string
+  notificationKind?: 'treatment-dose' | 'test'
+  notificationChannelId?: string
+  notificationChannelVersion?: number
   doseScheduleId?: string
   treatmentId?: string
   petId?: string
+  scheduledAt?: string
 }
+
+type AndroidNotificationIdentity = Pick<
+  DoseNotificationInput,
+  'doseScheduleId' | 'treatmentId' | 'petId' | 'scheduledAt'
+>
 
 function isNativePlatform() {
   return Capacitor.isNativePlatform()
+}
+
+function isAndroid() {
+  return Capacitor.getPlatform() === 'android'
+}
+
+function debugNotification(message: string, data?: unknown) {
+  if (!import.meta.env.DEV) return
+  if (data === undefined) {
+    console.info(`[CuidaPet notifications] ${message}`)
+    return
+  }
+  console.info(`[CuidaPet notifications] ${message}`, data)
 }
 
 function isCuidaPetNotification(
@@ -60,43 +87,113 @@ function getExtra(notification: PendingLocalNotificationSchema) {
   return notification.extra as NotificationExtra | undefined
 }
 
-function toLocalNotification(input: DoseNotificationInput) {
+function usesCurrentReminderChannel(
+  notification: PendingLocalNotificationSchema,
+) {
+  const extra = getExtra(notification)
+  return (
+    extra?.notificationChannelId === notificationChannelId &&
+    extra?.notificationChannelVersion === notificationChannelVersion
+  )
+}
+
+function baseScheduleResult(
+  overrides: Partial<NotificationScheduleResult> = {},
+): NotificationScheduleResult {
   return {
-    id: notificationIdFromDoseScheduleId(input.doseScheduleId),
+    supported: false,
+    permission: 'unsupported',
+    exactAlarm: 'unsupported',
+    scheduled: 0,
+    alreadyScheduled: 0,
+    cancelled: 0,
+    pending: 0,
+    ...overrides,
+  }
+}
+
+function hashToAndroidNotificationId(value: string) {
+  let hash = 2166136261
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+
+  return (hash >>> 0) & 0x7fffffff || 1
+}
+
+export function notificationIdFromDoseScheduleId(doseScheduleId: string) {
+  return hashToAndroidNotificationId(doseScheduleId)
+}
+
+export function notificationIdFromDoseNotification(
+  input: AndroidNotificationIdentity,
+) {
+  return hashToAndroidNotificationId(
+    [
+      'treatment',
+      input.treatmentId,
+      'pet',
+      input.petId,
+      'dose',
+      input.doseScheduleId,
+      'at',
+      input.scheduledAt,
+    ].join(':'),
+  )
+}
+
+function toLocalNotification(input: DoseNotificationInput) {
+  const body = `${input.petName}: ${input.medicationName} - ${formatDose(input.dose, input.doseUnit)}`
+
+  return {
+    id: notificationIdFromDoseNotification(input),
     title: 'Hora do remédio 🐾',
-    body: `${input.petName}: ${input.medicationName} - ${input.dose} ${input.doseUnit}`,
+    body,
+    largeBody: body,
+    summaryText: 'Lembrete de tratamento do CuidaPet',
     schedule: {
       at: new Date(input.scheduledAt),
       allowWhileIdle: true,
     },
+    sound: notificationSoundFile,
     channelId: notificationChannelId,
     smallIcon: notificationIcon,
     iconColor: notificationIconColor,
     autoCancel: true,
     extra: {
       source: notificationSource,
+      notificationKind: 'treatment-dose',
+      notificationChannelId,
+      notificationChannelVersion,
       doseScheduleId: input.doseScheduleId,
       treatmentId: input.treatmentId,
       petId: input.petId,
+      scheduledAt: input.scheduledAt,
     },
   }
 }
 
 async function ensureReminderChannel() {
-  if (!isNativePlatform() || Capacitor.getPlatform() !== 'android') return
+  if (!isNativePlatform() || !isAndroid()) return
 
   try {
     await LocalNotifications.createChannel({
       id: notificationChannelId,
-      name: 'Lembretes de medicamentos',
-      description: 'Alertas de doses cadastradas no CuidaPet.',
+      name: 'Lembretes de tratamento',
+      description:
+        'Notificações de horários de remédios e tratamentos dos pets.',
+      sound: notificationSoundFile,
       importance: 4,
       visibility: 1,
       lights: true,
       lightColor: notificationIconColor,
       vibration: true,
     })
-  } catch {
+    debugNotification('Canal Android verificado/criado', notificationChannelId)
+  } catch (error) {
+    debugNotification('Falha ao criar/verificar canal Android', error)
     // Se o canal já existir ou o Android não permitir alteração,
     // o agendamento ainda pode seguir usando a configuração padrão.
   }
@@ -112,21 +209,23 @@ async function cancelNotifications(
   notifications: PendingLocalNotificationSchema[],
 ) {
   if (notifications.length === 0) return 0
+
   await LocalNotifications.cancel({
     notifications: notifications.map(({ id }) => ({ id })),
+  })
+  debugNotification('Notificações canceladas', {
+    count: notifications.length,
+    ids: notifications.map(({ id }) => id),
   })
   return notifications.length
 }
 
-export function notificationIdFromDoseScheduleId(doseScheduleId: string) {
-  let hash = 2166136261
-
-  for (let index = 0; index < doseScheduleId.length; index += 1) {
-    hash ^= doseScheduleId.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
-  }
-
-  return (hash >>> 0) & 0x7fffffff || 1
+function getFutureDoses(doses: DoseNotificationInput[]) {
+  const now = Date.now()
+  return doses.filter((dose) => {
+    const scheduledAt = new Date(dose.scheduledAt).getTime()
+    return Number.isFinite(scheduledAt) && scheduledAt > now + minimumScheduleDelayMs
+  })
 }
 
 export const notificationService = {
@@ -146,34 +245,40 @@ export const notificationService = {
     const permission = await LocalNotifications.checkPermissions()
     let exactAlarm: PermissionState = 'granted'
 
-    if (Capacitor.getPlatform() === 'android') {
+    if (isAndroid()) {
       try {
         const exactStatus =
           await LocalNotifications.checkExactNotificationSetting()
         exactAlarm = exactStatus.exact_alarm
-      } catch {
+      } catch (error) {
+        debugNotification(
+          'checkExactNotificationSetting indisponível; assumindo concedido',
+          error,
+        )
         exactAlarm = 'granted'
       }
     }
 
-    return {
+    const status = {
       supported: true,
       permission: permission.display,
       exactAlarm,
     }
+    debugNotification('Status de permissão consultado', status)
+    return status
   },
 
   async requestPermission(): Promise<NotificationStatus> {
     if (!isNativePlatform()) return this.checkPermission()
+
     await LocalNotifications.requestPermissions()
-    return this.checkPermission()
+    const status = await this.checkPermission()
+    debugNotification('Permissão de notificação solicitada', status)
+    return status
   },
 
   async requestExactAlarmPermission(): Promise<NotificationStatus> {
-    if (
-      !isNativePlatform() ||
-      Capacitor.getPlatform() !== 'android'
-    ) {
+    if (!isNativePlatform() || !isAndroid()) {
       return this.checkPermission()
     }
 
@@ -189,74 +294,103 @@ export const notificationService = {
     doses: DoseNotificationInput[],
     options: { requestPermission?: boolean } = {},
   ): Promise<NotificationScheduleResult> {
-    if (!isNativePlatform()) {
-      return {
-        supported: false,
-        permission: 'unsupported',
-        scheduled: 0,
-        alreadyScheduled: 0,
-        cancelled: 0,
-        pending: 0,
-      }
-    }
+    if (!isNativePlatform()) return baseScheduleResult()
 
     const status = options.requestPermission
       ? await this.requestPermission()
       : await this.checkPermission()
+    const pending = await getCuidaPetPendingNotifications()
 
     if (status.permission !== 'granted') {
-      return {
+      return baseScheduleResult({
         supported: true,
         permission: status.permission,
-        scheduled: 0,
-        alreadyScheduled: 0,
-        cancelled: 0,
-        pending: (await getCuidaPetPendingNotifications()).length,
-      }
-    }
-
-    const now = Date.now()
-    const futureDoses = doses.filter(
-      (dose) =>
-        new Date(dose.scheduledAt).getTime() >
-        now + minimumScheduleDelayMs,
-    )
-    const pending = await getCuidaPetPendingNotifications()
-    const pendingIds = new Set(pending.map(({ id }) => id))
-    const missing = futureDoses.filter(
-      (dose) =>
-        !pendingIds.has(
-          notificationIdFromDoseScheduleId(dose.doseScheduleId),
-        ),
-    )
-
-    await ensureReminderChannel()
-
-    const chunkSize = 100
-    for (let index = 0; index < missing.length; index += chunkSize) {
-      await LocalNotifications.schedule({
-        notifications: missing
-          .slice(index, index + chunkSize)
-          .map(toLocalNotification),
+        exactAlarm: status.exactAlarm,
+        pending: pending.length,
       })
     }
 
-    const nextPending = await getCuidaPetPendingNotifications()
+    const futureDoses = getFutureDoses(doses)
+    const futureIds = new Set(
+      futureDoses.map((dose) => notificationIdFromDoseNotification(dose)),
+    )
+    const staleChannel = pending.filter(
+      (notification) =>
+        futureIds.has(notification.id) &&
+        !usesCurrentReminderChannel(notification),
+    )
+    const staleChannelIds = new Set(staleChannel.map(({ id }) => id))
+    const cancelled = await cancelNotifications(staleChannel)
+    const currentPending = pending.filter(
+      (notification) =>
+        !staleChannelIds.has(notification.id) &&
+        usesCurrentReminderChannel(notification),
+    )
+    const pendingIds = new Set(currentPending.map(({ id }) => id))
+    const missing = futureDoses.filter(
+      (dose) => !pendingIds.has(notificationIdFromDoseNotification(dose)),
+    )
 
-    return {
+    debugNotification('Preparando agendamento de doses', {
+      input: doses.length,
+      future: futureDoses.length,
+      missing: missing.length,
+      alreadyScheduled: futureDoses.length - missing.length,
+      staleChannel: staleChannel.length,
+      exactAlarm: status.exactAlarm,
+    })
+
+    await ensureReminderChannel()
+
+    for (let index = 0; index < missing.length; index += scheduleChunkSize) {
+      const chunk = missing.slice(index, index + scheduleChunkSize)
+      const notifications = chunk.map(toLocalNotification)
+      debugNotification('Agendando lote de notificações', {
+        count: notifications.length,
+        notifications: notifications.map((notification) => ({
+          id: notification.id,
+          at: notification.schedule.at.toISOString(),
+          treatmentId: notification.extra.treatmentId,
+          doseScheduleId: notification.extra.doseScheduleId,
+        })),
+      })
+      await LocalNotifications.schedule({ notifications })
+    }
+
+    const nextPending = await getCuidaPetPendingNotifications()
+    debugNotification('Agendamento concluído', {
+      scheduled: missing.length,
+      pending: nextPending.length,
+    })
+
+    return baseScheduleResult({
       supported: true,
       permission: status.permission,
+      exactAlarm: status.exactAlarm,
       scheduled: missing.length,
       alreadyScheduled: futureDoses.length - missing.length,
-      cancelled: 0,
+      cancelled,
       pending: nextPending.length,
-    }
+    })
   },
 
   async cancelDoseNotification(doseScheduleId: string) {
     if (!isNativePlatform()) return 0
-    const id = notificationIdFromDoseScheduleId(doseScheduleId)
-    await LocalNotifications.cancel({ notifications: [{ id }] })
+
+    const pending = await getCuidaPetPendingNotifications()
+    const byExtra = pending.filter(
+      (notification) =>
+        getExtra(notification)?.doseScheduleId === doseScheduleId,
+    )
+    const cancelledByExtra = await cancelNotifications(byExtra)
+    if (cancelledByExtra > 0) return cancelledByExtra
+
+    const legacyId = notificationIdFromDoseScheduleId(doseScheduleId)
+    await LocalNotifications.cancel({ notifications: [{ id: legacyId }] })
+    debugNotification('Cancelamento por ID legado de dose', {
+      doseScheduleId,
+      id: legacyId,
+    })
     return 1
   },
 
@@ -274,57 +408,53 @@ export const notificationService = {
   async syncPendingNotifications(
     doses: DoseNotificationInput[],
   ): Promise<NotificationScheduleResult> {
-    if (!isNativePlatform()) {
-      return {
-        supported: false,
-        permission: 'unsupported',
-        scheduled: 0,
-        alreadyScheduled: 0,
-        cancelled: 0,
-        pending: 0,
-      }
-    }
+    if (!isNativePlatform()) return baseScheduleResult()
 
     const status = await this.checkPermission()
     const pending = await getCuidaPetPendingNotifications()
 
     if (status.permission !== 'granted') {
-      return {
+      return baseScheduleResult({
         supported: true,
         permission: status.permission,
-        scheduled: 0,
-        alreadyScheduled: 0,
-        cancelled: 0,
+        exactAlarm: status.exactAlarm,
         pending: pending.length,
-      }
+      })
     }
 
-    const now = Date.now()
-    const futureDoses = doses.filter(
-      (dose) =>
-        new Date(dose.scheduledAt).getTime() >
-        now + minimumScheduleDelayMs,
-    )
+    const futureDoses = getFutureDoses(doses)
     const desiredIds = new Set(
-      futureDoses.map((dose) =>
-        notificationIdFromDoseScheduleId(dose.doseScheduleId),
-      ),
+      futureDoses.map((dose) => notificationIdFromDoseNotification(dose)),
     )
     const obsolete = pending.filter(
       (notification) => !desiredIds.has(notification.id),
     )
-    const cancelled = await cancelNotifications(obsolete)
+    const staleChannel = pending.filter(
+      (notification) =>
+        desiredIds.has(notification.id) &&
+        !usesCurrentReminderChannel(notification),
+    )
+    const cancelled = await cancelNotifications([...obsolete, ...staleChannel])
     const currentIds = new Set(
       pending
-        .filter((notification) => desiredIds.has(notification.id))
+        .filter(
+          (notification) =>
+            desiredIds.has(notification.id) &&
+            usesCurrentReminderChannel(notification),
+        )
         .map(({ id }) => id),
     )
     const missing = futureDoses.filter(
-      (dose) =>
-        !currentIds.has(
-          notificationIdFromDoseScheduleId(dose.doseScheduleId),
-        ),
+      (dose) => !currentIds.has(notificationIdFromDoseNotification(dose)),
     )
+
+    debugNotification('Sincronizando lembretes pendentes', {
+      future: futureDoses.length,
+      pendingBefore: pending.length,
+      obsolete: obsolete.length,
+      staleChannel: staleChannel.length,
+      missing: missing.length,
+    })
 
     const scheduleResult = await this.scheduleTreatmentNotifications(missing)
     const nextPending = await getCuidaPetPendingNotifications()
@@ -338,29 +468,18 @@ export const notificationService = {
   },
 
   async scheduleTestNotification(): Promise<NotificationScheduleResult> {
-    if (!isNativePlatform()) {
-      return {
-        supported: false,
-        permission: 'unsupported',
-        scheduled: 0,
-        alreadyScheduled: 0,
-        cancelled: 0,
-        pending: 0,
-      }
-    }
+    if (!isNativePlatform()) return baseScheduleResult()
 
     const status = await this.requestPermission()
     const pending = await getCuidaPetPendingNotifications()
 
     if (status.permission !== 'granted') {
-      return {
+      return baseScheduleResult({
         supported: true,
         permission: status.permission,
-        scheduled: 0,
-        alreadyScheduled: 0,
-        cancelled: 0,
+        exactAlarm: status.exactAlarm,
         pending: pending.length,
-      }
+      })
     }
 
     await ensureReminderChannel()
@@ -374,27 +493,36 @@ export const notificationService = {
           title: 'Teste CuidaPet 🐾',
           body: 'Se você recebeu este aviso, os lembretes locais estão funcionando.',
           schedule: {
-            at: new Date(Date.now() + 10_000),
+            at: new Date(Date.now() + 60_000),
             allowWhileIdle: true,
           },
+          sound: notificationSoundFile,
           channelId: notificationChannelId,
           smallIcon: notificationIcon,
           iconColor: notificationIconColor,
           autoCancel: true,
           extra: {
             source: notificationTestSource,
+            notificationKind: 'test',
+            notificationChannelId,
+            notificationChannelVersion,
           },
         },
       ],
     })
 
-    return {
+    const nextPending = await getCuidaPetPendingNotifications()
+    debugNotification('Notificação de teste agendada', {
+      id: testNotificationId,
+      pending: nextPending.length,
+    })
+
+    return baseScheduleResult({
       supported: true,
       permission: status.permission,
+      exactAlarm: status.exactAlarm,
       scheduled: 1,
-      alreadyScheduled: 0,
-      cancelled: 0,
-      pending: (await getCuidaPetPendingNotifications()).length,
-    }
+      pending: nextPending.length,
+    })
   },
 }

@@ -23,3 +23,16 @@ export function getPetEmoji(species: string) {
   if (normalized.includes('hamster') || normalized.includes('gerbil')) return '🐹'
   return '🐾'
 }
+
+export function formatApproximateAge(
+  age: number | null | undefined,
+  unit: 'months' | 'years' | null | undefined,
+) {
+  if (!age || age <= 0 || !unit) return ''
+
+  if (unit === 'months') {
+    return age === 1 ? '1 mês' : `${age} meses`
+  }
+
+  return age === 1 ? '1 ano' : `${age} anos`
+}

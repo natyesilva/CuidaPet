@@ -24,7 +24,11 @@ describe('weight helpers', () => {
 
   it('formata peso com unidade correta', () => {
     expect(formatWeight(12.4, 'kg')).toBe('12,4 kg')
+    expect(formatWeight(1.25, 'kg')).toBe('1,25 kg')
+    expect(formatWeight(0.093, 'kg')).toBe('0,093 kg')
     expect(formatWeight(0.42, 'g')).toBe('420 g')
+    expect(formatWeight(0.093, 'g')).toBe('93 g')
+    expect(formatWeight(1.25, 'g')).toBe('1.250 g')
+    expect(formatWeight(93, 'g')).toBe('93.000 g')
   })
 })
-

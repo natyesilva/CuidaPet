@@ -1,13 +1,10 @@
 import {
   Bell,
   BellRing,
-  ChevronRight,
-  HelpCircle,
   LoaderCircle,
   LogOut,
   Mail,
   RefreshCw,
-  ShieldCheck,
   Smartphone,
   UserRound,
 } from 'lucide-react'
@@ -33,9 +30,18 @@ function permissionLabel(status: NotificationStatus) {
   return 'Permissão ainda não solicitada'
 }
 
+function reminderCountLabel(count: number) {
+  return `${count} ${count === 1 ? 'lembrete agendado' : 'lembretes agendados'}`
+}
+
+function countLabel(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`
+}
+
 export function ProfilePage() {
   const { user, signOut } = useAuth()
   const { syncNotifications } = useAppData()
+  const showNotificationDiagnostics = import.meta.env.DEV
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [isUpdatingNotifications, setIsUpdatingNotifications] =
     useState(false)
@@ -107,7 +113,10 @@ export function ProfilePage() {
       setPendingCount(result.pending)
       setNotificationFeedback({
         type: 'success',
-        message: `Notificações ativadas. ${result.pending} lembrete(s) agendado(s).`,
+        message:
+          result.exactAlarm === 'denied'
+            ? `Notificações ativadas. ${reminderCountLabel(result.pending)}. O Android pode atrasar horários; permita alarmes exatos para maior precisão.`
+            : `Notificações ativadas. ${reminderCountLabel(result.pending)}.`,
       })
     } catch {
       setNotificationFeedback({
@@ -145,7 +154,10 @@ export function ProfilePage() {
       setPendingCount(result.pending)
       setNotificationFeedback({
         type: 'success',
-        message: `Lembretes sincronizados: ${result.scheduled} criado(s), ${result.cancelled} removido(s) e ${result.pending} pendente(s).`,
+        message:
+          result.exactAlarm === 'denied'
+            ? `Lembretes sincronizados: ${countLabel(result.scheduled, 'novo lembrete', 'novos lembretes')}, ${countLabel(result.cancelled, 'lembrete removido', 'lembretes removidos')} e ${countLabel(result.pending, 'lembrete pendente', 'lembretes pendentes')}. Permita alarmes exatos para reduzir atrasos no Android.`
+            : `Lembretes sincronizados: ${countLabel(result.scheduled, 'novo lembrete', 'novos lembretes')}, ${countLabel(result.cancelled, 'lembrete removido', 'lembretes removidos')} e ${countLabel(result.pending, 'lembrete pendente', 'lembretes pendentes')}.`,
       })
     } catch {
       setNotificationFeedback({
@@ -188,7 +200,7 @@ export function ProfilePage() {
 
       setNotificationFeedback({
         type: 'success',
-        message: 'Notificação de teste agendada para daqui 10 segundos.',
+        message: 'Notificação de teste agendada para daqui 1 minuto.',
       })
     } catch {
       setNotificationFeedback({
@@ -233,11 +245,6 @@ export function ProfilePage() {
       setIsSigningOut(false)
     }
   }
-
-  const settings = [
-    { icon: ShieldCheck, label: 'Privacidade e segurança' },
-    { icon: HelpCircle, label: 'Ajuda e suporte' },
-  ]
 
   return (
     <div className="space-y-6">
@@ -297,7 +304,7 @@ export function ProfilePage() {
                 {permissionLabel(notificationStatus)}
               </p>
               <p className="mt-3 text-xs font-bold text-brand-700">
-                {pendingCount} notificação(ões) agendada(s)
+                {reminderCountLabel(pendingCount)}
               </p>
               {notificationStatus.supported &&
                 notificationStatus.exactAlarm === 'denied' && (
@@ -352,43 +359,22 @@ export function ProfilePage() {
               Sincronizar lembretes
             </button>
 
-            <button
-              type="button"
-              onClick={() => void handleTestNotification()}
-              disabled={isUpdatingNotifications}
-              className="focus-ring inline-flex items-center justify-center gap-2 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-800 disabled:opacity-60"
-            >
-              {isUpdatingNotifications ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <Bell className="size-4" />
-              )}
-              Enviar notificação de teste
-            </button>
+            {showNotificationDiagnostics && (
+              <button
+                type="button"
+                onClick={() => void handleTestNotification()}
+                disabled={isUpdatingNotifications}
+                className="focus-ring inline-flex items-center justify-center gap-2 rounded-2xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-bold text-brand-800 disabled:opacity-60"
+              >
+                {isUpdatingNotifications ? (
+                  <LoaderCircle className="size-4 animate-spin" />
+                ) : (
+                  <Bell className="size-4" />
+                )}
+                Enviar notificação de teste
+              </button>
+            )}
           </div>
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-sm font-extrabold text-slate-900">
-          Configurações
-        </h2>
-        <div className="app-card divide-y divide-slate-100 overflow-hidden">
-          {settings.map(({ icon: Icon, label }) => (
-            <button
-              key={label}
-              type="button"
-              className="focus-ring flex w-full items-center gap-4 p-4 text-left transition hover:bg-slate-50"
-            >
-              <span className="grid size-10 place-items-center rounded-2xl bg-slate-50 text-slate-500">
-                <Icon className="size-5" />
-              </span>
-              <span className="flex-1 text-sm font-bold text-slate-700">
-                {label}
-              </span>
-              <ChevronRight className="size-4 text-slate-300" />
-            </button>
-          ))}
         </div>
       </section>
 
@@ -406,9 +392,6 @@ export function ProfilePage() {
         {isSigningOut ? 'Saindo...' : 'Sair da conta'}
       </button>
 
-      <p className="text-center text-xs text-slate-400">
-        CuidaPet MVP · versão 0.1.0
-      </p>
     </div>
   )
 }

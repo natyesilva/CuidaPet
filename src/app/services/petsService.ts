@@ -4,6 +4,8 @@ import type { Database } from '../../lib/database.types'
 type PetRow = Database['public']['Tables']['pets']['Row']
 type PetInsert = Database['public']['Tables']['pets']['Insert']
 
+export type ApproximateAgeUnit = 'months' | 'years'
+
 export type CreatePetInput = {
   name: string
   animalGroup: string | null
@@ -12,6 +14,10 @@ export type CreatePetInput = {
   subspeciesOrMorph: string | null
   breed: string | null
   sex: string | null
+  photoUrl: string | null
+  photoFile?: File | null
+  approximateAge: number | null
+  approximateAgeUnit: ApproximateAgeUnit | null
   weightKg: number | null
   weightUnit: string | null
   birthDate: string | null
@@ -42,6 +48,9 @@ export const petsService = {
       subspecies_or_morph: input.subspeciesOrMorph,
       breed: input.breed,
       sex: input.sex,
+      photo_url: input.photoUrl,
+      approximate_age: input.approximateAge,
+      approximate_age_unit: input.approximateAgeUnit,
       weight_kg: input.weightKg,
       weight_unit: input.weightUnit,
       birth_date: input.birthDate,
@@ -71,6 +80,9 @@ export const petsService = {
       subspecies_or_morph: input.subspeciesOrMorph,
       breed: input.breed,
       sex: input.sex,
+      photo_url: input.photoUrl,
+      approximate_age: input.approximateAge,
+      approximate_age_unit: input.approximateAgeUnit,
       weight_kg: input.weightKg,
       weight_unit: input.weightUnit,
       birth_date: input.birthDate,

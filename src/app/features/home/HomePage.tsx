@@ -11,7 +11,7 @@ import {
 import { Link } from 'react-router-dom'
 import { useAppData } from '../../shared/app-data-context'
 import { daysSince, formatRecordedAgo, formatTime } from '../../shared/date'
-import { getPetEmoji } from '../../shared/pet'
+import { PetAvatar } from '../../shared/PetAvatar'
 import { DataError, DataLoading, PageIntro } from '../../shared/ui'
 import { formatWeight } from '../../shared/weight'
 import { useAuth } from '../auth/auth-context'
@@ -139,9 +139,7 @@ export function HomePage() {
                       to={`/app/pets/${pet.id}`}
                       className="focus-ring flex items-center gap-4 p-4 transition hover:bg-brand-50/40"
                     >
-                      <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-cyan-50 text-xl">
-                        {getPetEmoji(pet.species)}
-                      </span>
+                      <PetAvatar pet={pet} size="md" />
                       <span className="min-w-0 flex-1">
                         <strong className="block truncate text-sm text-slate-900">
                           {pet.name}

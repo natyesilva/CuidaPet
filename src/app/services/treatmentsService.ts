@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import type { Database } from '../../lib/database.types'
+import { generateDoseScheduleDates } from '../shared/treatmentSchedule'
 
 type TreatmentRow = Database['public']['Tables']['treatments']['Row']
 type TreatmentInsert = Database['public']['Tables']['treatments']['Insert']
@@ -7,56 +8,39 @@ type DoseRow = Database['public']['Tables']['dose_schedules']['Row']
 type DoseInsert = Database['public']['Tables']['dose_schedules']['Insert']
 
 export type CreateTreatmentInput = {
-  petId: string
+  petId?: string
+  petIds?: string[]
   medicationName: string
   dose: string
   doseUnit: string
   frequencyHours: number
+  frequencyLabel: string | null
+  scheduleTimes?: string[]
   startAt: string
   endAt: string
   instructions: string | null
+  veterinarianId: string | null
   veterinarianName: string | null
 }
 
 function generateSchedules(
   userId: string,
   treatmentId: string,
+  petId: string,
   input: CreateTreatmentInput,
 ): DoseInsert[] {
-  const start = new Date(input.startAt)
-  const end = new Date(input.endAt)
-  const frequencyMs = input.frequencyHours * 60 * 60 * 1000
-  const schedules: DoseInsert[] = []
-
-  if (!Number.isFinite(frequencyMs) || frequencyMs <= 0) {
-    throw new Error('A frequência precisa ser maior que zero.')
-  }
-  if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime())) {
-    throw new Error('As datas do tratamento são inválidas.')
-  }
-  if (end <= start) {
-    throw new Error('A data final precisa ser maior que a data inicial.')
-  }
-
-  for (
-    let scheduledAt = start.getTime();
-    scheduledAt <= end.getTime();
-    scheduledAt += frequencyMs
-  ) {
-    schedules.push({
+  return generateDoseScheduleDates({
+    startAt: input.startAt,
+    endAt: input.endAt,
+    frequencyHours: input.frequencyHours,
+    scheduleTimes: input.scheduleTimes,
+  }).map((scheduledAt) => ({
       user_id: userId,
       treatment_id: treatmentId,
-      pet_id: input.petId,
-      scheduled_at: new Date(scheduledAt).toISOString(),
+      pet_id: petId,
+      scheduled_at: scheduledAt,
       status: 'pending',
-    })
-
-    if (schedules.length > 5000) {
-      throw new Error('O período informado gera doses demais. Reduza a duração do tratamento.')
-    }
-  }
-
-  return schedules
+    }))
 }
 
 async function insertSchedules(schedules: DoseInsert[]) {
@@ -76,6 +60,55 @@ async function insertSchedules(schedules: DoseInsert[]) {
   return createdSchedules
 }
 
+function getPetIds(input: CreateTreatmentInput) {
+  return input.petIds?.length ? input.petIds : input.petId ? [input.petId] : []
+}
+
+async function createOneTreatment(
+  userId: string,
+  petId: string,
+  input: CreateTreatmentInput,
+) {
+  const record: TreatmentInsert = {
+    user_id: userId,
+    pet_id: petId,
+    medication_name: input.medicationName,
+    dose: input.dose,
+    dose_unit: input.doseUnit,
+    frequency_hours: input.frequencyHours,
+    frequency_label: input.frequencyLabel,
+    start_at: input.startAt,
+    end_at: input.endAt,
+    instructions: input.instructions,
+    veterinarian_id: input.veterinarianId,
+    veterinarian_name: input.veterinarianName,
+    status: 'active',
+  }
+
+  const { data: treatment, error } = await supabase
+    .from('treatments')
+    .insert(record)
+    .select()
+    .single()
+
+  if (error) throw error
+
+  try {
+    const schedules = await insertSchedules(
+      generateSchedules(userId, treatment.id, petId, input),
+    )
+    return { treatment, schedules }
+  } catch (scheduleError) {
+    await supabase
+      .from('treatments')
+      .delete()
+      .eq('id', treatment.id)
+      .eq('user_id', userId)
+
+    throw scheduleError
+  }
+}
+
 export const treatmentsService = {
   async list(userId: string): Promise<TreatmentRow[]> {
     const { data, error } = await supabase
@@ -91,42 +124,31 @@ export const treatmentsService = {
   async create(
     userId: string,
     input: CreateTreatmentInput,
-  ): Promise<{ treatment: TreatmentRow; schedules: DoseRow[] }> {
-    const record: TreatmentInsert = {
-      user_id: userId,
-      pet_id: input.petId,
-      medication_name: input.medicationName,
-      dose: input.dose,
-      dose_unit: input.doseUnit,
-      frequency_hours: input.frequencyHours,
-      start_at: input.startAt,
-      end_at: input.endAt,
-      instructions: input.instructions,
-      veterinarian_name: input.veterinarianName,
-      status: 'active',
+  ): Promise<Array<{ treatment: TreatmentRow; schedules: DoseRow[] }>> {
+    const petIds = getPetIds(input)
+    if (petIds.length === 0) {
+      throw new Error('Selecione pelo menos um pet para o tratamento.')
     }
 
-    const { data: treatment, error } = await supabase
-      .from('treatments')
-      .insert(record)
-      .select()
-      .single()
-
-    if (error) throw error
+    const created: Array<{ treatment: TreatmentRow; schedules: DoseRow[] }> = []
 
     try {
-      const schedules = await insertSchedules(
-        generateSchedules(userId, treatment.id, input),
-      )
-      return { treatment, schedules }
-    } catch (scheduleError) {
-      await supabase
-        .from('treatments')
-        .delete()
-        .eq('id', treatment.id)
-        .eq('user_id', userId)
+      for (const petId of petIds) {
+        created.push(await createOneTreatment(userId, petId, input))
+      }
 
-      throw scheduleError
+      return created
+    } catch (error) {
+      await Promise.all(
+        created.map(({ treatment }) =>
+          supabase
+            .from('treatments')
+            .delete()
+            .eq('id', treatment.id)
+            .eq('user_id', userId),
+        ),
+      )
+      throw error
     }
   },
 

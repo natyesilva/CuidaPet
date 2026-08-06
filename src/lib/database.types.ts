@@ -63,12 +63,15 @@ export type Database = {
       pets: {
         Row: {
           animal_group: string | null
+          approximate_age: number | null
+          approximate_age_unit: string | null
           birth_date: string | null
           breed: string | null
           created_at: string
           id: string
           name: string
           notes: string | null
+          photo_url: string | null
           sex: string | null
           species: string
           specific_species: string | null
@@ -80,12 +83,15 @@ export type Database = {
         }
         Insert: {
           animal_group?: string | null
+          approximate_age?: number | null
+          approximate_age_unit?: string | null
           birth_date?: string | null
           breed?: string | null
           created_at?: string
           id?: string
           name: string
           notes?: string | null
+          photo_url?: string | null
           sex?: string | null
           species: string
           specific_species?: string | null
@@ -97,12 +103,15 @@ export type Database = {
         }
         Update: {
           animal_group?: string | null
+          approximate_age?: number | null
+          approximate_age_unit?: string | null
           birth_date?: string | null
           breed?: string | null
           created_at?: string
           id?: string
           name?: string
           notes?: string | null
+          photo_url?: string | null
           sex?: string | null
           species?: string
           specific_species?: string | null
@@ -202,6 +211,51 @@ export type Database = {
           },
         ]
       }
+      veterinarians: {
+        Row: {
+          clinic_name: string | null
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          specialty: string | null
+          updated_at: string
+          user_id: string
+          whatsapp: string | null
+        }
+        Insert: {
+          clinic_name?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          specialty?: string | null
+          updated_at?: string
+          user_id: string
+          whatsapp?: string | null
+        }
+        Update: {
+          clinic_name?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          specialty?: string | null
+          updated_at?: string
+          user_id?: string
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
       treatments: {
         Row: {
           created_at: string
@@ -209,6 +263,7 @@ export type Database = {
           dose_unit: string
           end_at: string
           frequency_hours: number
+          frequency_label: string | null
           id: string
           instructions: string | null
           medication_name: string
@@ -217,6 +272,7 @@ export type Database = {
           status: string
           updated_at: string
           user_id: string
+          veterinarian_id: string | null
           veterinarian_name: string | null
         }
         Insert: {
@@ -225,6 +281,7 @@ export type Database = {
           dose_unit: string
           end_at: string
           frequency_hours: number
+          frequency_label?: string | null
           id?: string
           instructions?: string | null
           medication_name: string
@@ -233,6 +290,7 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id: string
+          veterinarian_id?: string | null
           veterinarian_name?: string | null
         }
         Update: {
@@ -241,6 +299,7 @@ export type Database = {
           dose_unit?: string
           end_at?: string
           frequency_hours?: number
+          frequency_label?: string | null
           id?: string
           instructions?: string | null
           medication_name?: string
@@ -249,6 +308,7 @@ export type Database = {
           status?: string
           updated_at?: string
           user_id?: string
+          veterinarian_id?: string | null
           veterinarian_name?: string | null
         }
         Relationships: [
@@ -257,6 +317,13 @@ export type Database = {
             columns: ['pet_id']
             isOneToOne: false
             referencedRelation: 'pets'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'treatments_veterinarian_id_fkey'
+            columns: ['veterinarian_id']
+            isOneToOne: false
+            referencedRelation: 'veterinarians'
             referencedColumns: ['id']
           },
         ]

@@ -17,6 +17,7 @@ import {
   type CreatePetInput,
   type UpdatePetInput,
 } from '../services/petsService'
+import { petPhotoService } from '../services/petPhotoService'
 import {
   petVaccineService,
   type VaccineInput,
@@ -29,6 +30,10 @@ import {
   treatmentsService,
   type CreateTreatmentInput,
 } from '../services/treatmentsService'
+import {
+  veterinariansService,
+  type VeterinarianInput,
+} from '../services/veterinariansService'
 import { inferAnimalGroupForSpecies } from '../services/speciesOptions'
 import {
   AppDataContext,
@@ -39,13 +44,22 @@ import {
   type Pet,
   type Treatment,
   type Vaccine,
+  type Veterinarian,
   type WeightRecord,
 } from './app-data-context'
 import { getFriendlyDataError } from './errors'
+import { generateDoseScheduleDates } from './treatmentSchedule'
 
 type AppData = Pick<
   AppDataContextValue,
-  'pets' | 'treatments' | 'doses' | 'history' | 'weightRecords' | 'vaccines'
+  | 'pets'
+  | 'treatments'
+  | 'doses'
+  | 'history'
+  | 'weightRecords'
+  | 'vaccines'
+  | 'veterinarians'
+  | 'agendaDoses'
 > & {
   notificationDoses: Dose[]
 }
@@ -54,13 +68,16 @@ const emptyData: AppData = {
   pets: [],
   treatments: [],
   doses: [],
+  agendaDoses: [],
   history: [],
   weightRecords: [],
   vaccines: [],
+  veterinarians: [],
   notificationDoses: [],
 }
 
 const demoStorageKey = 'cuidapet:demo-data'
+const notificationPermissionPromptKey = 'cuidapet:notification-permission-prompted'
 
 type FutureDoseInfo = {
   id: string
@@ -104,11 +121,32 @@ function webNotificationResult(): NotificationScheduleResult {
   return {
     supported: false,
     permission: 'unsupported',
+    exactAlarm: 'unsupported',
     scheduled: 0,
     alreadyScheduled: 0,
     cancelled: 0,
     pending: 0,
   }
+}
+
+function uniqueWeightRecords(records: WeightRecord[]) {
+  const seen = new Set<string>()
+
+  return records.filter((record) => {
+    if (seen.has(record.id)) return false
+    seen.add(record.id)
+    return true
+  })
+}
+
+function latestPetWeight(records: WeightRecord[], petId: string) {
+  return records
+    .filter((record) => record.petId === petId)
+    .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))[0]
+}
+
+function countLabel(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`
 }
 
 function treatmentNotificationFeedback(
@@ -118,7 +156,7 @@ function treatmentNotificationFeedback(
   },
   doseCount: number,
 ) {
-  const doseSummary = `Tratamento criado com ${doseCount} dose(s).`
+  const doseSummary = `Tratamento criado com ${countLabel(doseCount, 'dose', 'doses')}.`
   const notificationResult = notificationAttempt.result
 
   if (notificationAttempt.failed) {
@@ -134,10 +172,20 @@ function treatmentNotificationFeedback(
   }
 
   if (notificationResult.scheduled === 0) {
-    return `${doseSummary} Nenhum lembrete futuro novo foi agendado. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.`
+    const exactAlarmNotice =
+      notificationResult.exactAlarm === 'denied'
+        ? ' O Android pode atrasar lembretes; permita alarmes exatos no Perfil.'
+        : ''
+
+    return `${doseSummary} Nenhum lembrete futuro novo foi agendado. ${countLabel(notificationResult.pending, 'lembrete pendente', 'lembretes pendentes')} no aparelho.${exactAlarmNotice}`
   }
 
-  return `${doseSummary} ${notificationResult.scheduled} lembrete(s) futuro(s) agendado(s) automaticamente. ${notificationResult.pending} notificação(ões) pendente(s) no aparelho.`
+  const exactAlarmNotice =
+    notificationResult.exactAlarm === 'denied'
+      ? ' O Android pode atrasar lembretes; permita alarmes exatos no Perfil para maior precisão.'
+      : ''
+
+  return `${doseSummary} ${countLabel(notificationResult.scheduled, 'lembrete futuro agendado', 'lembretes futuros agendados')} automaticamente. ${countLabel(notificationResult.pending, 'lembrete pendente', 'lembretes pendentes')} no aparelho.${exactAlarmNotice}`
 }
 
 async function scheduleNotificationsSafely(
@@ -161,6 +209,9 @@ async function scheduleNotificationsSafely(
         permission: notificationService.isSupported()
           ? 'prompt' as const
           : 'unsupported' as const,
+        exactAlarm: notificationService.isSupported()
+          ? 'prompt' as const
+          : 'unsupported' as const,
       },
     }
   }
@@ -182,6 +233,30 @@ async function cancelTreatmentNotificationsSafely(treatmentId: string) {
     // O tratamento continua salvo mesmo que o Android não permita
     // alterar os lembretes naquele momento.
   }
+}
+
+function fileToDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+      reject(new Error('Não foi possível preparar a foto. Tente novamente.'))
+    })
+    reader.addEventListener('error', () => {
+      reject(new Error('Não foi possível preparar a foto. Tente novamente.'))
+    })
+    reader.readAsDataURL(file)
+  })
+}
+
+async function resolveDemoPhotoUrl(
+  pet: Pick<CreatePetInput, 'photoFile' | 'photoUrl'>,
+) {
+  if (pet.photoFile) return fileToDataUrl(pet.photoFile)
+  return pet.photoUrl
 }
 
 function createDemoData(): AppData {
@@ -208,10 +283,13 @@ function createDemoData(): AppData {
         subspeciesOrMorph: null,
         breed: 'Golden Retriever',
         sex: 'Fêmea',
+        photoUrl: null,
+        approximateAge: null,
+        approximateAgeUnit: null,
         weightKg: 24,
         weightUnit: 'kg',
         birthDate: '2021-03-14',
-        notes: 'Dados de demonstração.',
+        notes: 'Gosta de passeios curtos e petiscos naturais.',
       },
       {
         id: 'demo-pet-mingau',
@@ -222,6 +300,9 @@ function createDemoData(): AppData {
         subspeciesOrMorph: null,
         breed: 'SRD',
         sex: 'Macho',
+        photoUrl: null,
+        approximateAge: null,
+        approximateAgeUnit: null,
         weightKg: 5,
         weightUnit: 'kg',
         birthDate: '2022-09-02',
@@ -236,10 +317,26 @@ function createDemoData(): AppData {
         subspeciesOrMorph: 'Amelanística',
         breed: null,
         sex: 'Fêmea',
+        photoUrl: null,
+        approximateAge: null,
+        approximateAgeUnit: null,
         weightKg: 0.42,
         weightUnit: 'g',
         birthDate: '2023-11-10',
-        notes: 'Exemplo de animal exótico com espécie específica e morfo.',
+        notes: 'Acompanhar alimentação e troca de pele.',
+      },
+    ]
+
+    const veterinarians: Veterinarian[] = [
+      {
+        id: 'demo-vet-ana',
+        name: 'Dra. Ana',
+        clinicName: 'Clínica Amigo Pet',
+        phone: '(11) 99999-0000',
+        whatsapp: '(11) 99999-0000',
+        email: null,
+        specialty: 'Clínica geral',
+        notes: 'Atende consultas de rotina e acompanhamento preventivo.',
       },
     ]
 
@@ -251,9 +348,11 @@ function createDemoData(): AppData {
         dose: '1',
         doseUnit: 'comprimido',
         frequencyHours: 12,
+        frequencyLabel: 'A cada 12 horas (08:00, 20:00)',
         startAt: morning.toISOString(),
         endAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         instructions: 'Oferecer depois da refeição.',
+        veterinarianId: 'demo-vet-ana',
         veterinarianName: 'Dra. Ana',
         status: 'active',
       },
@@ -268,41 +367,46 @@ function createDemoData(): AppData {
       notes: null,
     }
 
+    const doses: Dose[] = [
+      {
+        ...baseDose,
+        id: 'demo-dose-morning',
+        scheduledAt: morning.toISOString(),
+        status: 'pending',
+        appliedAt: null,
+      },
+      {
+        ...baseDose,
+        id: 'demo-dose-evening',
+        scheduledAt: evening.toISOString(),
+        status: 'pending',
+        appliedAt: null,
+      },
+    ]
+
+    const history: Dose[] = [
+      {
+        ...baseDose,
+        id: 'demo-history-yesterday',
+        scheduledAt: yesterday.toISOString(),
+        status: 'applied',
+        appliedAt: new Date(yesterday.getTime() + 5 * 60 * 1000).toISOString(),
+      },
+    ]
+
     return {
       pets,
       treatments,
-      doses: [
-        {
-          ...baseDose,
-          id: 'demo-dose-morning',
-          scheduledAt: morning.toISOString(),
-          status: 'pending',
-          appliedAt: null,
-        },
-        {
-          ...baseDose,
-          id: 'demo-dose-evening',
-          scheduledAt: evening.toISOString(),
-          status: 'pending',
-          appliedAt: null,
-        },
-      ],
-      history: [
-        {
-          ...baseDose,
-          id: 'demo-history-yesterday',
-          scheduledAt: yesterday.toISOString(),
-          status: 'applied',
-          appliedAt: new Date(yesterday.getTime() + 5 * 60 * 1000).toISOString(),
-        },
-      ],
+      doses,
+      agendaDoses: [...doses, ...history],
+      history,
       weightRecords: [
         {
           id: 'demo-weight-luna',
           petId: 'demo-pet-luna',
           weightKg: 24,
           recordedAt: fiveDaysAgo.toISOString().slice(0, 10),
-          notes: 'Peso de demonstração.',
+          notes: 'Registro inicial.',
         },
         {
           id: 'demo-weight-mingau',
@@ -316,7 +420,7 @@ function createDemoData(): AppData {
           petId: 'demo-pet-sol',
           weightKg: 0.42,
           recordedAt: fiveDaysAgo.toISOString().slice(0, 10),
-          notes: 'Peso em kg equivalente a 420 g.',
+          notes: 'Registro inicial.',
         },
       ],
       vaccines: [
@@ -333,6 +437,7 @@ function createDemoData(): AppData {
           notes: null,
         },
       ],
+      veterinarians,
       notificationDoses: [],
     }
 }
@@ -373,13 +478,25 @@ export function AppDataProvider({ children }: PropsWithChildren) {
               specificSpecies: pet.specificSpecies ?? null,
               subspeciesOrMorph: pet.subspeciesOrMorph ?? null,
               sex: pet.sex ?? null,
+              photoUrl: pet.photoUrl ?? null,
+              approximateAge: pet.approximateAge ?? null,
+              approximateAgeUnit: pet.approximateAgeUnit ?? null,
               weightUnit: pet.weightUnit ?? 'kg',
             })),
-            treatments: parsed.treatments ?? [],
+            treatments: (parsed.treatments ?? []).map((treatment) => ({
+              ...treatment,
+              frequencyLabel: treatment.frequencyLabel ?? null,
+              veterinarianId: treatment.veterinarianId ?? null,
+            })),
             doses: parsed.doses ?? [],
+            agendaDoses: parsed.agendaDoses ?? [
+              ...(parsed.doses ?? []),
+              ...(parsed.history ?? []),
+            ],
             history: parsed.history ?? [],
             weightRecords: parsed.weightRecords ?? [],
             vaccines: parsed.vaccines ?? [],
+            veterinarians: parsed.veterinarians ?? [],
             notificationDoses: parsed.notificationDoses ?? [],
           }
         }
@@ -413,17 +530,21 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         petRows,
         treatmentRows,
         doseRows,
+        agendaDoseRows,
         historyRows,
         weightRows,
         vaccineRows,
+        veterinarianRows,
         futureDoseRows,
       ] = await Promise.all([
         petsService.list(user.id),
         treatmentsService.list(user.id),
         dosesService.listToday(user.id),
+        dosesService.listAgenda(user.id),
         dosesService.listHistory(user.id),
         petWeightService.list(user.id),
         petVaccineService.list(user.id),
+        veterinariansService.list(user.id),
         dosesService.listFuturePending(user.id),
       ])
 
@@ -436,6 +557,12 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         subspeciesOrMorph: pet.subspecies_or_morph,
         breed: pet.breed,
         sex: pet.sex,
+        photoUrl: pet.photo_url,
+        approximateAge: pet.approximate_age,
+        approximateAgeUnit:
+          pet.approximate_age_unit === 'months' || pet.approximate_age_unit === 'years'
+            ? pet.approximate_age_unit
+            : null,
         weightKg: pet.weight_kg,
         weightUnit: pet.weight_unit,
         birthDate: pet.birth_date,
@@ -449,9 +576,11 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         dose: treatment.dose,
         doseUnit: treatment.dose_unit,
         frequencyHours: treatment.frequency_hours,
+        frequencyLabel: treatment.frequency_label,
         startAt: treatment.start_at,
         endAt: treatment.end_at,
         instructions: treatment.instructions,
+        veterinarianId: treatment.veterinarian_id,
         veterinarianName: treatment.veterinarian_name,
         status: treatment.status,
       }))
@@ -481,6 +610,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         pets,
         treatments,
         doses: doseRows.map(mapDose),
+        agendaDoses: agendaDoseRows.map(mapDose),
         history: historyRows.map(mapDose),
         weightRecords: weightRows.map((record): WeightRecord => ({
           id: record.id,
@@ -498,6 +628,16 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           veterinarianName: vaccine.veterinarian_name,
           clinicName: vaccine.clinic_name,
           notes: vaccine.notes,
+        })),
+        veterinarians: veterinarianRows.map((veterinarian): Veterinarian => ({
+          id: veterinarian.id,
+          name: veterinarian.name,
+          clinicName: veterinarian.clinic_name,
+          phone: veterinarian.phone,
+          whatsapp: veterinarian.whatsapp,
+          email: veterinarian.email,
+          specialty: veterinarian.specialty,
+          notes: veterinarian.notes,
         })),
         notificationDoses: [],
       }
@@ -527,12 +667,42 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     void refreshData()
   }, [refreshData])
 
+  useEffect(() => {
+    if (!user || !notificationService.isSupported()) return
+
+    const promptKey = `${notificationPermissionPromptKey}:${user.id}`
+    if (localStorage.getItem(promptKey) === 'done') return
+
+    let cancelled = false
+
+    async function requestNotificationPermissionOnce() {
+      const status = await notificationService.checkPermission()
+      if (cancelled) return
+
+      if (
+        status.permission === 'prompt' ||
+        status.permission === 'prompt-with-rationale'
+      ) {
+        await notificationService.requestPermission()
+      }
+
+      localStorage.setItem(promptKey, 'done')
+    }
+
+    void requestNotificationPermissionOnce().catch(() => undefined)
+
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
   const addPet = useCallback(
     async (pet: CreatePetInput) => {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
 
       if (isDemoMode) {
         const petId = `demo-pet-${crypto.randomUUID()}`
+        const photoUrl = await resolveDemoPhotoUrl(pet)
         const initialWeight: WeightRecord[] =
           pet.weightKg && pet.weightKg > 0
             ? [
@@ -557,6 +727,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
               subspeciesOrMorph: pet.subspeciesOrMorph,
               breed: pet.breed,
               sex: pet.sex,
+              photoUrl,
+              approximateAge: pet.approximateAge,
+              approximateAgeUnit: pet.approximateAgeUnit,
               weightKg: pet.weightKg,
               weightUnit: pet.weightUnit,
               birthDate: pet.birthDate,
@@ -568,11 +741,22 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         }
         setData(nextData)
         persistDemoData(nextData)
-        setFeedback({ type: 'success', message: 'Pet cadastrado no modo demo.' })
+        setFeedback({ type: 'success', message: 'Pet cadastrado com sucesso.' })
         return
       }
 
-      const createdPet = await petsService.create(user.id, pet)
+      const createdPet = await petsService.create(user.id, {
+        ...pet,
+        photoUrl: pet.photoFile ? null : pet.photoUrl,
+      })
+      if (pet.photoFile) {
+        const photoUrl = await petPhotoService.upload(user.id, createdPet.id, pet.photoFile)
+        await petsService.update(user.id, createdPet.id, {
+          ...pet,
+          photoUrl,
+          photoFile: null,
+        })
+      }
       if (pet.weightKg && pet.weightKg > 0) {
         await petWeightService.create(user.id, createdPet.id, {
           weightKg: pet.weightKg,
@@ -591,6 +775,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
 
       if (isDemoMode) {
+        const photoUrl = await resolveDemoPhotoUrl(pet)
         const nextData: AppData = {
           ...data,
           pets: data.pets.map((currentPet) =>
@@ -604,6 +789,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
                   subspeciesOrMorph: pet.subspeciesOrMorph,
                   breed: pet.breed,
                   sex: pet.sex,
+                  photoUrl,
+                  approximateAge: pet.approximateAge,
+                  approximateAgeUnit: pet.approximateAgeUnit,
                   weightKg: pet.weightKg,
                   weightUnit: pet.weightUnit,
                   birthDate: pet.birthDate,
@@ -618,7 +806,14 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         return
       }
 
-      await petsService.update(user.id, petId, pet)
+      const photoUrl = pet.photoFile
+        ? await petPhotoService.upload(user.id, petId, pet.photoFile)
+        : pet.photoUrl
+      await petsService.update(user.id, petId, {
+        ...pet,
+        photoUrl,
+        photoFile: null,
+      })
       await refreshData()
       setFeedback({ type: 'success', message: 'Dados do pet atualizados.' })
     },
@@ -641,6 +836,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
           doses: data.doses.filter(
             (dose) => dose.petId !== petId && !treatmentIds.has(dose.treatmentId),
           ),
+          agendaDoses: data.agendaDoses.filter(
+            (dose) => dose.petId !== petId && !treatmentIds.has(dose.treatmentId),
+          ),
           history: data.history.filter(
             (dose) => dose.petId !== petId && !treatmentIds.has(dose.treatmentId),
           ),
@@ -648,6 +846,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             (record) => record.petId !== petId,
           ),
           vaccines: data.vaccines.filter((vaccine) => vaccine.petId !== petId),
+          veterinarians: data.veterinarians,
           notificationDoses: data.notificationDoses.filter(
             (dose) => dose.petId !== petId,
           ),
@@ -657,7 +856,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         await Promise.all(
           [...treatmentIds].map(cancelTreatmentNotificationsSafely),
         )
-        setFeedback({ type: 'success', message: 'Pet excluído do modo demo.' })
+        setFeedback({ type: 'success', message: 'Pet excluído com sucesso.' })
         return
       }
 
@@ -678,57 +877,79 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     async (treatment: CreateTreatmentInput) => {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
 
+      const selectedPetIds = treatment.petIds?.length
+        ? treatment.petIds
+        : treatment.petId
+          ? [treatment.petId]
+          : []
+
+      if (selectedPetIds.length === 0) {
+        throw new Error('Selecione pelo menos um pet para o tratamento.')
+      }
+
       if (isDemoMode) {
-        const treatmentId = `demo-treatment-${crypto.randomUUID()}`
-        const newTreatment: Treatment = {
-          id: treatmentId,
-          petId: treatment.petId,
-          medicationName: treatment.medicationName,
-          dose: treatment.dose,
-          doseUnit: treatment.doseUnit,
-          frequencyHours: treatment.frequencyHours,
-          startAt: treatment.startAt,
-          endAt: treatment.endAt,
-          instructions: treatment.instructions,
-          veterinarianName: treatment.veterinarianName,
-          status: 'active',
-        }
         const todayStart = new Date()
         todayStart.setHours(0, 0, 0, 0)
         const todayEnd = new Date(todayStart)
         todayEnd.setDate(todayEnd.getDate() + 1)
+        const newTreatments: Treatment[] = []
         const newDoses: Dose[] = []
         const allNewDoses: Dose[] = []
-        const frequencyMs = treatment.frequencyHours * 60 * 60 * 1000
 
-        for (
-          let scheduledAt = new Date(treatment.startAt).getTime();
-          scheduledAt <= new Date(treatment.endAt).getTime();
-          scheduledAt += frequencyMs
-        ) {
-          const newDose: Dose = {
-            id: `demo-dose-${crypto.randomUUID()}`,
-            treatmentId,
-            petId: treatment.petId,
-            scheduledAt: new Date(scheduledAt).toISOString(),
-            status: 'pending',
-            appliedAt: null,
-            notes: null,
+        for (const petId of selectedPetIds) {
+          const treatmentId = `demo-treatment-${crypto.randomUUID()}`
+          newTreatments.push({
+            id: treatmentId,
+            petId,
             medicationName: treatment.medicationName,
             dose: treatment.dose,
             doseUnit: treatment.doseUnit,
-          }
-          allNewDoses.push(newDose)
+            frequencyHours: treatment.frequencyHours,
+            frequencyLabel: treatment.frequencyLabel,
+            startAt: treatment.startAt,
+            endAt: treatment.endAt,
+            instructions: treatment.instructions,
+            veterinarianId: treatment.veterinarianId,
+            veterinarianName: treatment.veterinarianName,
+            status: 'active',
+          })
 
-          if (scheduledAt >= todayStart.getTime() && scheduledAt < todayEnd.getTime()) {
-            newDoses.push(newDose)
+          for (const scheduledAt of generateDoseScheduleDates({
+            startAt: treatment.startAt,
+            endAt: treatment.endAt,
+            frequencyHours: treatment.frequencyHours,
+            scheduleTimes: treatment.scheduleTimes,
+          })) {
+            const newDose: Dose = {
+              id: `demo-dose-${crypto.randomUUID()}`,
+              treatmentId,
+              petId,
+              scheduledAt,
+              status: 'pending',
+              appliedAt: null,
+              notes: null,
+              medicationName: treatment.medicationName,
+              dose: treatment.dose,
+              doseUnit: treatment.doseUnit,
+            }
+            allNewDoses.push(newDose)
+
+            if (
+              new Date(scheduledAt).getTime() >= todayStart.getTime() &&
+              new Date(scheduledAt).getTime() < todayEnd.getTime()
+            ) {
+              newDoses.push(newDose)
+            }
           }
         }
 
         const nextData: AppData = {
           ...data,
-          treatments: [newTreatment, ...data.treatments],
+          treatments: [...newTreatments, ...data.treatments],
           doses: [...data.doses, ...newDoses].sort((a, b) =>
+            a.scheduledAt.localeCompare(b.scheduledAt),
+          ),
+          agendaDoses: [...data.agendaDoses, ...allNewDoses].sort((a, b) =>
             a.scheduledAt.localeCompare(b.scheduledAt),
           ),
           notificationDoses: [
@@ -738,22 +959,26 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         }
         setData(nextData)
         persistDemoData(nextData)
-        const pet = data.pets.find((item) => item.id === treatment.petId)
-        const notificationAttempt = pet
-          ? await scheduleNotificationsSafely(
-              allNewDoses.map((dose) => ({
-                doseScheduleId: dose.id,
-                treatmentId,
-                petId: dose.petId,
-                petName: pet.name,
-                medicationName: dose.medicationName,
-                dose: dose.dose,
-                doseUnit: dose.doseUnit,
-                scheduledAt: dose.scheduledAt,
-              })),
-              true,
-            )
-          : { failed: false, result: webNotificationResult() }
+
+        const petMap = new Map(data.pets.map((pet) => [pet.id, pet]))
+        const notificationAttempt = await scheduleNotificationsSafely(
+          allNewDoses.flatMap((dose) => {
+            const pet = petMap.get(dose.petId)
+            if (!pet) return []
+
+            return [{
+              doseScheduleId: dose.id,
+              treatmentId: dose.treatmentId,
+              petId: dose.petId,
+              petName: pet.name,
+              medicationName: dose.medicationName,
+              dose: dose.dose,
+              doseUnit: dose.doseUnit,
+              scheduledAt: dose.scheduledAt,
+            }]
+          }),
+          true,
+        )
         setFeedback({
           type: 'success',
           message: treatmentNotificationFeedback(
@@ -764,29 +989,35 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         return
       }
 
-      const { schedules } = await treatmentsService.create(user.id, treatment)
-      const pet = data.pets.find((item) => item.id === treatment.petId)
-      const notificationAttempt = pet
-        ? await scheduleNotificationsSafely(
-            schedules.map((dose) => ({
+      const createdTreatments = await treatmentsService.create(user.id, treatment)
+      const petMap = new Map(data.pets.map((pet) => [pet.id, pet]))
+      const allSchedules = createdTreatments.flatMap(({ schedules }) => schedules)
+      const notificationAttempt = await scheduleNotificationsSafely(
+        createdTreatments.flatMap(({ schedules, treatment: createdTreatment }) =>
+          schedules.flatMap((dose) => {
+            const pet = petMap.get(dose.pet_id)
+            if (!pet) return []
+
+            return [{
               doseScheduleId: dose.id,
-              treatmentId: dose.treatment_id,
+              treatmentId: createdTreatment.id,
               petId: dose.pet_id,
               petName: pet.name,
               medicationName: treatment.medicationName,
               dose: treatment.dose,
               doseUnit: treatment.doseUnit,
               scheduledAt: dose.scheduled_at,
-            })),
-            true,
-        )
-      : { failed: false, result: webNotificationResult() }
+            }]
+          }),
+        ),
+        true,
+      )
       await refreshData()
       setFeedback({
         type: 'success',
         message: treatmentNotificationFeedback(
           notificationAttempt,
-          schedules.length,
+          allSchedules.length,
         ),
       })
     },
@@ -808,7 +1039,15 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         const nextData: AppData = {
           ...data,
           pets: data.pets.map((pet) =>
-            pet.id === petId ? { ...pet, weightKg: input.weightKg } : pet,
+            pet.id === petId
+              ? {
+                  ...pet,
+                  weightKg: latestPetWeight(
+                    [record, ...data.weightRecords],
+                    petId,
+                  )?.weightKg ?? input.weightKg,
+                }
+              : pet,
           ),
           weightRecords: [record, ...data.weightRecords].sort((a, b) =>
             b.recordedAt.localeCompare(a.recordedAt),
@@ -823,6 +1062,51 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       await petWeightService.create(user.id, petId, input)
       await refreshData()
       setFeedback({ type: 'success', message: 'Peso registrado com sucesso.' })
+    },
+    [data, isDemoMode, refreshData, user],
+  )
+
+  const updateWeight = useCallback(
+    async (weightId: string, input: CreateWeightInput) => {
+      if (!user) throw new Error('Sessão expirada. Entre novamente.')
+
+      if (isDemoMode) {
+        const existingRecord = data.weightRecords.find(
+          (record) => record.id === weightId,
+        )
+        if (!existingRecord) throw new Error('Peso não encontrado.')
+
+        const weightRecords = data.weightRecords
+          .map((record) =>
+            record.id === weightId
+              ? {
+                  ...record,
+                  weightKg: input.weightKg,
+                  recordedAt: input.recordedAt,
+                  notes: input.notes,
+                }
+              : record,
+          )
+          .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt))
+        const latestWeight = latestPetWeight(weightRecords, existingRecord.petId)
+        const nextData: AppData = {
+          ...data,
+          pets: data.pets.map((pet) =>
+            pet.id === existingRecord.petId
+              ? { ...pet, weightKg: latestWeight?.weightKg ?? pet.weightKg }
+              : pet,
+          ),
+          weightRecords,
+        }
+        setData(nextData)
+        persistDemoData(nextData)
+        setFeedback({ type: 'success', message: 'Peso atualizado com sucesso.' })
+        return
+      }
+
+      await petWeightService.update(user.id, weightId, input)
+      await refreshData()
+      setFeedback({ type: 'success', message: 'Peso atualizado com sucesso.' })
     },
     [data, isDemoMode, refreshData, user],
   )
@@ -897,12 +1181,117 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     [data, isDemoMode, refreshData, user],
   )
 
+  const addVeterinarian = useCallback(
+    async (input: VeterinarianInput) => {
+      if (!user) throw new Error('Sessão expirada. Entre novamente.')
+
+      if (isDemoMode) {
+        const veterinarian: Veterinarian = {
+          id: `demo-vet-${crypto.randomUUID()}`,
+          ...input,
+        }
+        const nextData = {
+          ...data,
+          veterinarians: [...data.veterinarians, veterinarian].sort((a, b) =>
+            a.name.localeCompare(b.name),
+          ),
+        }
+        setData(nextData)
+        persistDemoData(nextData)
+        setFeedback({
+          type: 'success',
+          message: 'Veterinário cadastrado com sucesso.',
+        })
+        return
+      }
+
+      await veterinariansService.create(user.id, input)
+      await refreshData()
+      setFeedback({
+        type: 'success',
+        message: 'Veterinário cadastrado com sucesso.',
+      })
+    },
+    [data, isDemoMode, refreshData, user],
+  )
+
+  const updateVeterinarian = useCallback(
+    async (veterinarianId: string, input: VeterinarianInput) => {
+      if (!user) throw new Error('Sessão expirada. Entre novamente.')
+
+      if (isDemoMode) {
+        const nextData = {
+          ...data,
+          veterinarians: data.veterinarians
+            .map((veterinarian) =>
+              veterinarian.id === veterinarianId
+                ? { ...veterinarian, ...input }
+                : veterinarian,
+            )
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        }
+        setData(nextData)
+        persistDemoData(nextData)
+        setFeedback({
+          type: 'success',
+          message: 'Veterinário atualizado com sucesso.',
+        })
+        return
+      }
+
+      await veterinariansService.update(user.id, veterinarianId, input)
+      await refreshData()
+      setFeedback({
+        type: 'success',
+        message: 'Veterinário atualizado com sucesso.',
+      })
+    },
+    [data, isDemoMode, refreshData, user],
+  )
+
+  const deleteVeterinarian = useCallback(
+    async (veterinarianId: string) => {
+      if (!user) throw new Error('Sessão expirada. Entre novamente.')
+
+      if (isDemoMode) {
+        const nextData = {
+          ...data,
+          veterinarians: data.veterinarians.filter(
+            (veterinarian) => veterinarian.id !== veterinarianId,
+          ),
+        }
+        setData(nextData)
+        persistDemoData(nextData)
+        setFeedback({
+          type: 'success',
+          message: 'Veterinário removido da lista ativa.',
+        })
+        return
+      }
+
+      await veterinariansService.softDelete(user.id, veterinarianId)
+      await refreshData()
+      setFeedback({
+        type: 'success',
+        message: 'Veterinário removido da lista ativa.',
+      })
+    },
+    [data, isDemoMode, refreshData, user],
+  )
+
   const changeTreatmentStatus = useCallback(
     async (
       treatmentId: string,
       status: 'completed' | 'cancelled',
     ) => {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
+
+      const pendingDoseIds = data.agendaDoses
+        .filter(
+          (dose) =>
+            dose.treatmentId === treatmentId && dose.status === 'pending',
+        )
+        .map((dose) => dose.id)
 
       if (isDemoMode) {
         const nextData = {
@@ -912,15 +1301,29 @@ export function AppDataProvider({ children }: PropsWithChildren) {
               ? { ...treatment, status }
               : treatment,
           ),
+          doses: data.doses.filter(
+            (dose) =>
+              dose.treatmentId !== treatmentId || dose.status !== 'pending',
+          ),
+          agendaDoses: data.agendaDoses.filter(
+            (dose) =>
+              dose.treatmentId !== treatmentId || dose.status !== 'pending',
+          ),
+          notificationDoses: data.notificationDoses.filter(
+            (dose) =>
+              dose.treatmentId !== treatmentId || dose.status !== 'pending',
+          ),
         }
         setData(nextData)
         persistDemoData(nextData)
       } else {
         await treatmentsService.updateStatus(user.id, treatmentId, status)
+        await dosesService.removePendingForTreatment(user.id, treatmentId)
         await refreshData()
       }
 
       await cancelTreatmentNotificationsSafely(treatmentId)
+      await Promise.all(pendingDoseIds.map(cancelDoseNotificationSafely))
       setFeedback({
         type: 'success',
         message:
@@ -936,6 +1339,13 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     async (treatmentId: string) => {
       if (!user) throw new Error('Sessão expirada. Entre novamente.')
 
+      const pendingDoseIds = data.agendaDoses
+        .filter(
+          (dose) =>
+            dose.treatmentId === treatmentId && dose.status === 'pending',
+        )
+        .map((dose) => dose.id)
+
       if (isDemoMode) {
         const nextData: AppData = {
           ...data,
@@ -943,6 +1353,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
             (treatment) => treatment.id !== treatmentId,
           ),
           doses: data.doses.filter(
+            (dose) => dose.treatmentId !== treatmentId,
+          ),
+          agendaDoses: data.agendaDoses.filter(
             (dose) => dose.treatmentId !== treatmentId,
           ),
           history: data.history.filter(
@@ -960,6 +1373,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       }
 
       await cancelTreatmentNotificationsSafely(treatmentId)
+      await Promise.all(pendingDoseIds.map(cancelDoseNotificationSafely))
       setFeedback({
         type: 'success',
         message: 'Tratamento e lembretes excluídos.',
@@ -984,6 +1398,9 @@ export function AppDataProvider({ children }: PropsWithChildren) {
         const nextData: AppData = {
           ...data,
           doses: data.doses.map((dose) => (dose.id === doseId ? updatedDose : dose)),
+          agendaDoses: data.agendaDoses.map((dose) =>
+            dose.id === doseId ? updatedDose : dose,
+          ),
           history: [
             updatedDose,
             ...data.history.filter((dose) => dose.id !== doseId),
@@ -1064,9 +1481,13 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       updatePet,
       deletePet,
       addWeight,
+      updateWeight,
       addVaccine,
       updateVaccine,
       deleteVaccine,
+      addVeterinarian,
+      updateVeterinarian,
+      deleteVeterinarian,
       addTreatment,
       changeTreatmentStatus,
       deleteTreatment,
@@ -1077,9 +1498,16 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       getPet: (petId) => data.pets.find((pet) => pet.id === petId),
       getTreatment: (treatmentId) =>
         data.treatments.find((treatment) => treatment.id === treatmentId),
+      getVeterinarian: (veterinarianId) =>
+        veterinarianId
+          ? data.veterinarians.find(
+              (veterinarian) => veterinarian.id === veterinarianId,
+            )
+          : undefined,
       getPetWeights: (petId) =>
-        data.weightRecords
-          .filter((record) => record.petId === petId)
+        uniqueWeightRecords(
+          data.weightRecords.filter((record) => record.petId === petId),
+        )
           .sort((a, b) => b.recordedAt.localeCompare(a.recordedAt)),
       getPetVaccines: (petId) =>
         data.vaccines
@@ -1092,12 +1520,15 @@ export function AppDataProvider({ children }: PropsWithChildren) {
     }),
     [
       addPet,
+      addVeterinarian,
       addVaccine,
       addWeight,
+      updateWeight,
       addTreatment,
       changeTreatmentStatus,
       data,
       deleteTreatment,
+      deleteVeterinarian,
       deleteVaccine,
       deletePet,
       feedback,
@@ -1106,6 +1537,7 @@ export function AppDataProvider({ children }: PropsWithChildren) {
       refreshData,
       syncNotifications,
       updatePet,
+      updateVeterinarian,
       updateVaccine,
       updateDoseStatus,
     ],
