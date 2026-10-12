@@ -97,7 +97,7 @@ Pendentes/inexistentes: modo offline, notificações push remotas, compartilhame
 ## Riscos técnicos
 - **Credencial demo hardcoded** (`test` / senha fixa em AuthProvider) no bundle de produção.
 - Sem limite de notificações agendadas: tratamentos longos/frequentes podem exceder o limite do
-  Android (~500 alarmes) ou do AlarmManager; notificações não são reagendadas após reboot pelo app.
+  Android (~500 alarmes por app); restauração após reboot depende do plugin (não verificado em aparelho).
 - Geração de doses no cliente sem transação: rollback manual pode deixar lixo em falha de rede.
 - `AppDataProvider` monolítico com lógica duplicada demo/Supabase -> mudanças precisam tocar os dois ramos.
 - Carrega todos os dados do usuário em memória; sem paginação (exceto histórico 200).
