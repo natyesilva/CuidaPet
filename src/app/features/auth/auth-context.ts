@@ -1,4 +1,5 @@
 import type { Session, User } from '@supabase/supabase-js'
+import type { RecoveryUrlParams } from './passwordRecovery'
 import { createContext, useContext } from 'react'
 
 export type AppUser = Pick<User, 'id' | 'email' | 'user_metadata'>
@@ -18,6 +19,10 @@ export type AuthContextValue = {
   signIn: (identifier: string, password: string) => Promise<void>
   signUp: (data: SignUpData) => Promise<{ needsEmailConfirmation: boolean }>
   signOut: () => Promise<void>
+  requestPasswordReset: (email: string) => Promise<void>
+  verifyRecoveryCode: (email: string, code: string) => Promise<void>
+  recoverSessionFromUrl: (params: RecoveryUrlParams) => Promise<void>
+  updatePassword: (password: string) => Promise<void>
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

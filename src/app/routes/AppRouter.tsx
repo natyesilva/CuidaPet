@@ -1,12 +1,14 @@
 import { Capacitor } from '@capacitor/core'
 import { type ReactNode, useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 import { LandingPage } from '../../App'
 import { HistoryPage } from '../features/doses/HistoryPage'
 import { TodayPage } from '../features/doses/TodayPage'
 import { HomePage } from '../features/home/HomePage'
 import { LoginPage, RegisterPage } from '../features/auth/AuthPage'
 import { AuthProvider } from '../features/auth/AuthProvider'
+import { ForgotPasswordPage, ResetPasswordPage } from '../features/auth/PasswordRecoveryPage'
+import { isRecoveryRedirect, passwordResetPath } from '../features/auth/passwordRecovery'
 import { useAuth } from '../features/auth/auth-context'
 import { NewPetPage } from '../features/pets/NewPetPage'
 import { PetDetailPage } from '../features/pets/PetDetailPage'
@@ -20,6 +22,12 @@ import { FullScreenLoader } from '../shared/ui'
 
 function RootRoute() {
   const { isAuthenticated } = useAuth()
+  const { search, hash } = useLocation()
+
+  // Sem redirectTo válido, o Supabase envia o link de recuperação para o Site URL (raiz).
+  if (isRecoveryRedirect(search, hash)) {
+    return <Navigate to={`${passwordResetPath}${search}${hash}`} replace />
+  }
 
   return Capacitor.isNativePlatform() ? (
     <Navigate to={isAuthenticated ? '/app/home' : '/app/login'} replace />
@@ -76,6 +84,9 @@ export function AppRouter() {
         <NativeStartupGate>
           <Routes>
             <Route path="/" element={<RootRoute />} />
+
+            <Route path="/app/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path={passwordResetPath} element={<ResetPasswordPage />} />
 
             <Route element={<PublicOnlyRoute />}>
               <Route path="/app/login" element={<LoginPage />} />

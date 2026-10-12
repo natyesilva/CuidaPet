@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import type { Session } from '@supabase/supabase-js'
 import {
   type PropsWithChildren,
@@ -11,6 +12,7 @@ import {
   type AppUser,
   type AuthContextValue,
 } from './auth-context'
+import { getPasswordResetRedirectUrl } from './passwordRecovery'
 
 const demoStorageKey = 'cuidapet:demo-session'
 const demoUser: AppUser = {
@@ -129,6 +131,59 @@ export function AuthProvider({ children }: PropsWithChildren) {
         const { error } = await supabase.auth.signOut()
         if (error) throw error
         setSession(null)
+      },
+      async requestPasswordReset(email) {
+        const redirectTo = getPasswordResetRedirectUrl(
+          window.location.origin,
+          Capacitor.isNativePlatform(),
+          import.meta.env.VITE_PUBLIC_SITE_URL,
+        )
+        const { error } = await supabase.auth.resetPasswordForEmail(
+          email.trim().toLowerCase(),
+          redirectTo ? { redirectTo } : undefined,
+        )
+        if (error) throw error
+      },
+      async verifyRecoveryCode(email, code) {
+        localStorage.removeItem(demoStorageKey)
+        setIsDemoMode(false)
+        const { data, error } = await supabase.auth.verifyOtp({
+          email: email.trim().toLowerCase(),
+          token: code.trim(),
+          type: 'recovery',
+        })
+        if (error) throw error
+        setSession(data.session)
+      },
+      async recoverSessionFromUrl(params) {
+        localStorage.removeItem(demoStorageKey)
+        setIsDemoMode(false)
+
+        if (params.kind === 'tokens') {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: params.accessToken,
+            refresh_token: params.refreshToken,
+          })
+          if (error) throw error
+          setSession(data.session)
+          return
+        }
+
+        if (params.kind === 'tokenHash') {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: params.tokenHash,
+            type: 'recovery',
+          })
+          if (error) throw error
+          setSession(data.session)
+          return
+        }
+
+        throw new Error(params.kind === 'error' ? params.message : 'invalid link')
+      },
+      async updatePassword(password) {
+        const { error } = await supabase.auth.updateUser({ password })
+        if (error) throw error
       },
     }),
     [isDemoMode, isLoading, session],

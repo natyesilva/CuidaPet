@@ -28,9 +28,10 @@ tests/{unit,integration,e2e}
 
 ## Arquivos-chave
 - `AppRouter.tsx`: `/` = landing no web; no nativo redireciona p/ `/app/home` ou `/app/login`.
-  Públicas: `/app/login`, `/app/register`. Protegidas (AppShell): `home, pets, pets/new, pets/:petId,
+  Públicas: `/app/login`, `/app/register`; sem guard: `/app/forgot-password`, `/app/reset-password`. Protegidas (AppShell): `home, pets, pets/new, pets/:petId,
   treatments, treatments/new, today, history, profile`. Splash nativo mínimo de 1,4s.
-- `features/auth/AuthProvider.tsx`: sessão Supabase, signIn/signUp/signOut, **modo demo**.
+- `features/auth/AuthProvider.tsx`: sessão Supabase, signIn/signUp/signOut, recuperação de senha, **modo demo**.
+- `features/auth/PasswordRecoveryPage.tsx` + `passwordRecovery.ts`: esqueci a senha (link ou código OTP).
 - `shared/AppDataProvider.tsx` (~1100 linhas): carrega todos os dados, expõe CRUD (addPet, updatePet,
   deletePet, addTreatment, changeTreatmentStatus, deleteTreatment, updateDoseStatus, addWeight,
   add/update/deleteVaccine, syncNotifications). Tem ramo duplicado para modo demo (localStorage).
@@ -54,6 +55,10 @@ Trigger `set_updated_at` em pets, treatments, pet_vaccines. Deletes de pet/trata
 
 ## Fluxos principais
 1. Auth: login/cadastro via Supabase (`persistSession` em localStorage, `detectSessionInUrl:false`).
+   Esqueci a senha: `resetPasswordForEmail` (redirectTo = `VITE_PUBLIC_SITE_URL` ou origem web) ->
+   (a) link abre `/app/reset-password` no navegador (tokens no hash são lidos manualmente; `/` com
+   `type=recovery` redireciona) ou (b) código digitado no app (`verifyOtp` type recovery, exige
+   `{{ .Token }}` no template de e-mail) -> `updateUser({ password })`.
 2. Pets: lista -> novo (PetForm) -> detalhe (editar, registrar peso, CRUD de vacinas) -> excluir.
 3. Tratamento: `treatmentsService.create` insere treatment e **gera no cliente** todas as doses
    (start..end a cada frequency_hours), inserindo em lotes de 500; em falha, apaga o treatment (rollback manual).
@@ -75,14 +80,14 @@ Trigger `set_updated_at` em pets, treatments, pet_vaccines. Deletes de pet/trata
   Supabase, flag `cuidapet:demo-session` e dados demo `cuidapet:demo-data`.
 
 ## Status das funcionalidades
-Confirmadas: auth email/senha; CRUD pets c/ espécies exóticas e unidade g/kg; histórico de peso;
+Confirmadas: auth email/senha; recuperação de senha; CRUD pets c/ espécies exóticas e unidade g/kg; histórico de peso;
 CRUD vacinas; tratamentos c/ geração de doses; agenda do dia; histórico; notificações locais de doses;
 modo demo; landing + waitlist; testes unit/integration/e2e.
 Parciais:
 - Vacinas: `next_due_at` é salvo/exibido, mas **não gera lembrete**.
 - Status `missed`: existe no schema/tipos, mas nada marca doses atrasadas como `missed`.
 - Edição de tratamento: só status (concluir/cancelar) e exclusão; sem editar campos.
-- Recuperação de senha / login social: não encontrados.
+- Login social: não encontrado.
 Pendentes/inexistentes: modo offline, notificações push remotas, compartilhamento familiar
 (só citado na landing — `FamilyFeature.tsx`), anexos/fotos de pets, iOS.
 
@@ -115,5 +120,5 @@ Pendentes/inexistentes: modo offline, notificações push remotas, compartilhame
 - Ao mudar doses/tratamentos, manter sincronia com notificações (agendar/cancelar por doseScheduleId).
 - Nunca calcular dosagem: o app só registra a prescrição do veterinário.
 - Espécies: estender `services/speciesOptions.ts`; não assumir cão/gato; peso pode ser em gramas.
-- Não ler/commitar `.env`; variáveis só `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`.
+- Não ler/commitar `.env`; variáveis: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_PUBLIC_SITE_URL` (opcional).
 - Rodar `npm run lint` e `npm run test:unit` antes de commitar; UI em pt-BR.

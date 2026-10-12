@@ -2,29 +2,11 @@ import { ArrowLeft, Eye, EyeOff, LoaderCircle, LockKeyhole, Mail, UserRound } fr
 import { type FormEvent, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppLogo } from '../../shared/AppLogo'
+import { getFriendlyAuthError } from './authErrors'
 import { useAuth } from './auth-context'
 
 type AuthPageProps = {
   mode: 'login' | 'register'
-}
-
-function getFriendlyAuthError(message: string) {
-  const normalized = message.toLowerCase()
-
-  if (normalized.includes('invalid login credentials')) {
-    return 'E-mail ou senha incorretos.'
-  }
-  if (normalized.includes('user already registered')) {
-    return 'Este e-mail já possui uma conta.'
-  }
-  if (normalized.includes('password should be')) {
-    return 'A senha precisa ter pelo menos 6 caracteres.'
-  }
-  if (normalized.includes('email rate limit')) {
-    return 'Muitas tentativas seguidas. Aguarde um pouco e tente novamente.'
-  }
-
-  return 'Não foi possível concluir agora. Revise os dados e tente novamente.'
 }
 
 function AuthPage({ mode }: AuthPageProps) {
@@ -161,6 +143,17 @@ function AuthPage({ mode }: AuthPageProps) {
                 </button>
               </span>
             </label>
+
+            {!isRegister && (
+              <div className="-mt-2 text-right">
+                <Link
+                  to="/app/forgot-password"
+                  className="focus-ring rounded-md text-sm font-bold text-brand-700 hover:text-brand-800"
+                >
+                  Esqueci minha senha
+                </Link>
+              </div>
+            )}
 
             {errorMessage && (
               <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700" role="alert">
