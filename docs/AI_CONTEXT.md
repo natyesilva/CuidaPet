@@ -2,7 +2,7 @@
 
 ## Objetivo e stack
 App Android para tutores organizarem pets (incl. exóticos), peso, vacinas, tratamentos e doses, com lembretes locais.
-O mesmo bundle web serve a landing page (Vercel) e o app (Capacitor).
+O mesmo bundle web serve a landing page (Vercel: https://cuidapet.vercel.app) e o app (Capacitor).
 - React 18 + TypeScript 5.6 + Vite 6 + Tailwind 3 + react-router-dom 7 + lucide-react.
 - Capacitor 7 (`appId br.com.cuidapet.app`, `webDir dist`) + `@capacitor/local-notifications`.
 - Supabase (`@supabase/supabase-js`): Auth (email/senha) + Postgres com RLS. Sem Edge Functions.
